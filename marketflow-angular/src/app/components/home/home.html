@@ -1,0 +1,85 @@
+<div class="size-full overflow-auto bg-green-50">
+  <div class="min-h-full flex flex-col items-center justify-center p-8">
+    <div class="w-full max-w-7xl">
+      <!-- Header Section -->
+      <div class="text-center mb-12">
+        <div class="inline-flex items-center justify-center p-3 bg-green-100 rounded-full mb-6">
+          <i class="lucide lucide-trending-up text-green-600 text-6xl"></i>
+        </div>
+        <h1
+          class="mb-4 bg-gradient-to-r from-green-600 to-green-800 bg-clip-text text-transparent"
+          style="font-size: 6rem"
+        >
+          MarketFlow
+        </h1>
+        <p class="text-gray-600 max-w-2xl mx-auto">
+          Your comprehensive platform for simulating market environments, analyzing trading sessions,
+          and managing automated trading bots.
+        </p>
+      </div>
+
+      <!-- Feature Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+        <!-- Environment Setup -->
+        <card
+          title="Environment Setup"
+          description="Configure and create custom market simulation environments with API integrations"
+          icon="settings"
+          buttonLabel="Create Environment"
+          (click)="goTo('environment-setup')"
+        ></card>
+
+        <!-- Market Analysis -->
+        <card
+          title="Market Analysis"
+          description="Analyze trading sessions and visualize real-time market data with comprehensive dashboards"
+          icon="bar-chart-3"
+          buttonLabel="Start Analysis"
+          (click)="goTo('analysis')"
+        ></card>
+
+        <!-- Bot Management -->
+        <card
+          title="Bot Management"
+          description="Create, edit, and manage automated trading bots with custom strategies and parameters"
+          icon="bot"
+          buttonLabel="Manage Bots"
+          (click)="goTo('bot-management')"
+        ></card>
+      </div>
+
+      <!-- Stats Section -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white rounded-lg p-6 border border-gray-100 shadow-sm flex items-center gap-4">
+          <div class="p-3 bg-green-50 rounded-lg">
+            <i class="lucide lucide-users h-6 w-6 text-green-600"></i>
+          </div>
+          <div>
+            <p class="text-sm text-gray-600">Active Users</p>
+            <p class="text-green-600">24 Traders</p>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg p-6 border border-gray-100 shadow-sm flex items-center gap-4">
+          <div class="p-3 bg-green-50 rounded-lg">
+            <i class="lucide lucide-activity h-6 w-6 text-green-600"></i>
+          </div>
+          <div>
+            <p class="text-sm text-gray-600">Trading Sessions</p>
+            <p class="text-green-600">127 Completed</p>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg p-6 border border-gray-100 shadow-sm flex items-center gap-4">
+          <div class="p-3 bg-green-50 rounded-lg">
+            <i class="lucide lucide-trending-up h-6 w-6 text-green-600"></i>
+          </div>
+          <div>
+            <p class="text-sm text-gray-600">Total Volume</p>
+            <p class="text-green-600">$2.4M</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
