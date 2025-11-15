@@ -1,0 +1,81 @@
+:root{
+	--bg: #f7f7f8;
+	--surface: #ffffff;
+	--muted: #6b7280; 
+	--accent: #0f766e; 
+	--glass: rgba(255,255,255,0.6);
+}
+
+.size-full { min-height: 100vh; background: transparent; }
+.min-h-full { min-height: 100vh; }
+.flex { display:flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.p-8 { padding: 2rem; }
+.w-full { width: 100%; }
+.max-w-7xl { max-width: 1100px; margin-left: auto; margin-right: auto; }
+.text-center { text-align: center; }
+.mb-12 { margin-bottom: 3rem; }
+.mb-6 { margin-bottom: 1.5rem; }
+.mb-4 { margin-bottom: 1rem; }
+.gap-8 { gap: 2rem; }
+.grid { display: grid; }
+.grid-cols-1 { grid-template-columns: 1fr; }
+@media (min-width: 768px){ .md\:grid-cols-3 { grid-template-columns: repeat(3, 1fr); } }
+
+
+.site-title{
+	font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+	font-weight: 300;
+	font-size: 3.25rem; 
+	color: #c1ffd3; 
+	margin: 0 auto 1rem;
+	letter-spacing: -0.02em;
+}
+
+.site-subtitle{
+	color: var(--muted);
+	max-width: 40rem;
+	margin: 0 auto;
+	line-height: 1.5;
+}
+
+card, .card, .bg-white {
+	background: var(--surface);
+	border: 1px solid rgba(15,118,110,0.06);
+	border-radius: 12px;
+	padding: 1.25rem;
+	box-shadow: none;
+}
+
+.p-6 { padding: 1.5rem; }
+.rounded-lg { border-radius: 12px; }
+.shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+.text-sm { font-size: 0.875rem; }
+.text-green-600 { color: var(--accent); }
+.text-gray-600 { color: var(--muted); }
+
+.p-3 { padding: 0.75rem; }
+.bg-green-50 { background: rgba(15,118,110,0.06); border-radius:8px; }
+
+@media (max-width: 640px){
+	.site-title{ font-size: 2rem; }
+	.max-w-7xl{ padding: 0 1rem; }
+}
+
+.inline-flex { display: inline-flex; }
+.rounded-full { border-radius: 9999px; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+
+.card-button, button {
+	background: transparent;
+	border: 1px solid rgba(15,118,110,0.08);
+	color: var(--accent);
+	padding: 0.5rem 0.75rem;
+	border-radius: 8px;
+	cursor: pointer;
+}
+
+button:focus, .card-button:focus, a:focus { outline: 3px solid rgba(15,118,110,0.12); outline-offset: 2px; }
