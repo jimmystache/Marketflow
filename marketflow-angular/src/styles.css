@@ -1,32 +1,70 @@
-:root{
-	--app-bg: #02102b; /* deep navy */
-	--app-surface: #07182f;
-	--text: #e6eef6;
+:root {
+	/* Color Palette */
+	--green-50: #f0fdf4;
+	--green-100: #dcfce7;
+	--green-200: #bbf7d0;
+	--green-600: #16a34a;
+	--green-700: #15803d;
+	--green-800: #166534;
+	--gray-100: #f3f4f6;
+	--gray-600: #4b5563;
+	--white: #ffffff;
 }
 
 html, body {
 	height: 100%;
 	margin: 0;
-	background: linear-gradient(180deg, #02162f 0%, var(--app-bg) 100%);
-	color: var(--text);
+	background: var(--green-50);
+	color: #111827;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 	font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, -apple-system;
-	font-weight: 300; 
+	font-size: 16px;
+	font-weight: 400;
+	line-height: 1.5;
 }
-
 
 app-root, #app-root, .app-root {
 	min-height: 100vh;
 	display: block;
 }
 
-.surface {
-	background: rgba(255,255,255,0.02);
-	border-radius: 10px;
+/* Typography */
+h1 {
+	font-size: 6rem;
+	font-weight: 500;
+	line-height: 1.5;
+	margin: 0;
 }
 
-h1, h2, h3 {
-	font-weight: 300;
-	color: var(--text);
+h2 {
+	font-size: 1.5rem;
+	font-weight: 500;
+	line-height: 1.5;
+	margin: 0;
+}
+
+h3 {
+	font-size: 1.25rem;
+	font-weight: 500;
+	line-height: 1.5;
+	margin: 0;
+}
+
+button, .button-label {
+	font-weight: 500;
+	line-height: 1.5;
+}
+
+/* Gradient text for main heading */
+.gradient-text {
+	background: linear-gradient(to right, var(--green-600), var(--green-800));
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
+}
+
+/* Transitions - Applied to interactive elements */
+button, a, .card, card, input, select, textarea {
+	transition: all 300ms ease;
 }

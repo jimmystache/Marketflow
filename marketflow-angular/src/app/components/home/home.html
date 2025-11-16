@@ -4,12 +4,15 @@
       <!-- Header Section -->
       <div class="text-center mb-12">
         <div class="inline-flex items-center justify-center p-3 bg-green-100 rounded-full mb-6">
-          <i class="lucide lucide-trending-up text-green-600 text-6xl"></i>
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600" style="display: block;">
+            <path d="M3 3v18h18"/>
+            <path d="m19 9-5 5-4-4-3 3"/>
+          </svg>
         </div>
-  <h1 class="mb-4 site-title">MarketFlow</h1>
-        <p class="text-gray-600 max-w-2xl mx-auto">
+        <h1 class="mb-4 gradient-text" style="font-size: 6rem; font-weight: 500; line-height: 1.5;">MarketFlow</h1>
+        <p class="text-gray-600 max-w-2xl mx-auto" style="font-size: 1rem; line-height: 1.5;">
           Your comprehensive platform for simulating market environments, analyzing trading sessions,
-          and managing automated trading bots.
+          and managing automated trading bots
         </p>
       </div>
 
@@ -21,7 +24,7 @@
           description="Configure and create custom market simulation environments with API integrations"
           icon="settings"
           buttonLabel="Create Environment"
-          (click)="goTo('environment-setup')"
+          (cardClick)="goTo('environment-setup')"
         ></card>
 
         <!-- Market Analysis -->
@@ -30,7 +33,7 @@
           description="Analyze trading sessions and visualize real-time market data with comprehensive dashboards"
           icon="bar-chart-3"
           buttonLabel="Start Analysis"
-          (click)="goTo('analysis')"
+          (cardClick)="goTo('analysis')"
         ></card>
 
         <!-- Bot Management -->
@@ -39,7 +42,7 @@
           description="Create, edit, and manage automated trading bots with custom strategies and parameters"
           icon="bot"
           buttonLabel="Manage Bots"
-          (click)="goTo('bot-management')"
+          (cardClick)="goTo('bot-management')"
         ></card>
       </div>
 
@@ -47,7 +50,12 @@
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="bg-white rounded-lg p-6 border border-gray-100 shadow-sm flex items-center gap-4">
           <div class="p-3 bg-green-50 rounded-lg">
-            <i class="lucide lucide-users h-6 w-6 text-green-600"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
           </div>
           <div>
             <p class="text-sm text-gray-600">Active Users</p>
@@ -57,7 +65,12 @@
 
         <div class="bg-white rounded-lg p-6 border border-gray-100 shadow-sm flex items-center gap-4">
           <div class="p-3 bg-green-50 rounded-lg">
-            <i class="lucide lucide-activity h-6 w-6 text-green-600"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600">
+              <path d="M3 3v18h18"/>
+              <path d="M18 17V9"/>
+              <path d="M13 17V5"/>
+              <path d="M8 17v-3"/>
+            </svg>
           </div>
           <div>
             <p class="text-sm text-gray-600">Trading Sessions</p>
@@ -67,7 +80,10 @@
 
         <div class="bg-white rounded-lg p-6 border border-gray-100 shadow-sm flex items-center gap-4">
           <div class="p-3 bg-green-50 rounded-lg">
-            <i class="lucide lucide-trending-up h-6 w-6 text-green-600"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600">
+              <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+              <polyline points="16 7 22 7 22 13"/>
+            </svg>
           </div>
           <div>
             <p class="text-sm text-gray-600">Total Volume</p>
