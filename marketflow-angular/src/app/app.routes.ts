@@ -1,21 +1,18 @@
-import { NgModule } from '@angular/core';
-import { Routes, RouterModule } from '@angular/router';
+import { Routes } from '@angular/router';
 import { Home } from './components/home/home';
 import { EnvironmentSetup } from './components/environment-setup/environment-setup';
 import { Analysis } from './components/analysis/analysis';
 import { BotManagement } from './components/bot-management/bot-management';
-import { AnalysisDashboard } from './components/analysis-dashboard/analysis-dashboard';
+import { Login } from './components/login/login';
+import { Dashboard } from './components/dashboard/dashboard';
+import { authGuard } from './guards/auth.guard';
 
 export const routes: Routes = [
-  { path: '', component: Home },
-  { path: 'environment-setup', component: EnvironmentSetup },
-  { path: 'analysis', component: Analysis },
-  { path: 'bot-management', component: BotManagement },
-  { path: 'analysis-dashboard', component: AnalysisDashboard },
+  { path: 'login', component: Login },
+  { path: '', component: Home, canActivate: [authGuard] },
+  { path: 'dashboard', component: Dashboard, canActivate: [authGuard] },
+  { path: 'environment-setup', component: EnvironmentSetup, canActivate: [authGuard] },
+  { path: 'analysis', component: Analysis, canActivate: [authGuard] },
+  { path: 'bot-management', component: BotManagement, canActivate: [authGuard] },
+  { path: '**', redirectTo: '/' }
 ];
-
-@NgModule({
-  imports: [RouterModule.forRoot(routes)],
-  exports: [RouterModule]
-})
-export class AppRoutingModule{}
