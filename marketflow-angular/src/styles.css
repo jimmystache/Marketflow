@@ -1,1 +1,32 @@
-/* You can add global styles to this file, and also import other style files */
+:root{
+	--app-bg: #02102b; /* deep navy */
+	--app-surface: #07182f;
+	--text: #e6eef6;
+}
+
+html, body {
+	height: 100%;
+	margin: 0;
+	background: linear-gradient(180deg, #02162f 0%, var(--app-bg) 100%);
+	color: var(--text);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, -apple-system;
+	font-weight: 300; 
+}
+
+
+app-root, #app-root, .app-root {
+	min-height: 100vh;
+	display: block;
+}
+
+.surface {
+	background: rgba(255,255,255,0.02);
+	border-radius: 10px;
+}
+
+h1, h2, h3 {
+	font-weight: 300;
+	color: var(--text);
+}
