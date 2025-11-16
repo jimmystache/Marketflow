@@ -1,0 +1,50 @@
+# orders -- begin
+account,email,owner,marketplace,session,market,target,order,original,supplier,consumer,type,side,units,price,createdDate,lastModifiedDate,clientDescription
+# orders -- end
+
+
+
+# holdings -- begin
+account,email,owner,marketplace,session,name,cash,cash__initial,A_2533,A_2533__initial,A_2533__shorts,A_2533__buy,A_2533__sell,B_2534,B_2534__initial,B_2534__shorts,B_2534__buy,B_2534__sell
+Fintech2024,fintech@eccles.edu,50972,1441,137616,M034,0,0,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1366021@morning,50973,1441,137616,T000,-369,-369,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1380112@morning,50974,1441,137616,T009,545,545,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1365348@morning,50976,1441,137616,T014,1248,1248,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1221053@morning,50977,1441,137616,T017,253,253,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1364530@morning,50978,1441,137616,T012,458,458,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1217973@morning,50979,1441,137616,T030,205,205,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1389274@morning,50981,1441,137616,T018,315,315,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1292760@morning,50982,1441,137616,T004,0,0,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1359483@morning,50983,1441,137616,T032,310,310,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u0581779@morning,50984,1441,137616,T019,1400,1400,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1196595@morning,50985,1441,137616,T022,258,258,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1395166@morning,50986,1441,137616,T026,792,792,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1411735@morning,50987,1441,137616,T007,166,166,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1405336@morning,50988,1441,137616,T011,1394,1394,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1476024@morning,50989,1441,137616,T002,262,262,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1360376@morning,50990,1441,137616,T008,0,0,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1297565@morning,50991,1441,137616,T015,-195,-195,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1339543@morning,50992,1441,137616,T040,1189,1189,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1344318@morning,50993,1441,137616,T031,238,238,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1355787@morning,50994,1441,137616,T003,1303,1303,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1375711@morning,50995,1441,137616,T001,280,280,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1416375@morning,50996,1441,137616,T043,1206,1206,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1244551@morning,50997,1441,137616,T023,254,254,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1365590@morning,50998,1441,137616,T039,512,512,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1363838@morning,50999,1441,137616,T041,103,103,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1437123@morning,51000,1441,137616,T016,0,0,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1270040@morning,51002,1441,137616,T045,0,0,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1459727@morning,51003,1441,137616,T020,0,0,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1321287@morning,51004,1441,137616,T027,0,0,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1311274@morning,51005,1441,137616,T044,286,286,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u0000001@morning,51020,1441,137616,T013,0,0,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u0000002@morning,51021,1441,137616,T024,0,0,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u0000003@morning,51022,1441,137616,T010,0,0,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u0000004@morning,51023,1441,137616,T036,0,0,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u0000005@morning,51024,1441,137616,T021,0,0,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1311610@morning,51038,1441,137616,T029,1369,1369,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1402380@morning,51039,1441,137616,T042,-204,-204,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1304316@morning,51040,1441,137616,T006,389,389,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1164385@morning,51041,1441,137616,T035,239,239,0,0,0,false,false,0,0,0,false,false
+Fintech2024,u1182487@morning,51042,1441,137616,T037,536,536,0,0,0,false,false,0,0,0,false,false
+# holdings -- end
