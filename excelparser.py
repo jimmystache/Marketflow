@@ -9,9 +9,14 @@ try:
 except Exception:
     pd = None
 import json
-
+"""
+most likely use cases:
+python excelparser.py ".\csv_examples\marketplace (14).csv" --section orders --columns marketplace,session --as-list
+in csv examples marketplace (14).csv, look in the orders section, take out the columns for marketplace and session, and return them as a JSON list in stdout
+"""
 
 def extract_section_text(path, section_name):
+    
     """Return the CSV text for a named section (between markers).
 
     Markers are lines like: `# holdings -- begin` and `# holdings -- end`.
