@@ -1,0 +1,31 @@
+# orders -- begin
+account,email,owner,marketplace,session,market,target,order,original,supplier,consumer,type,side,units,price,createdDate,lastModifiedDate,clientDescription
+# orders -- end
+
+
+
+# holdings -- begin
+account,email,owner,marketplace,session,name,cash,cash__initial,A_2535,A_2535__initial,A_2535__shorts,A_2535__buy,A_2535__sell
+Fintech2024,fintech@eccles.edu,50972,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u1477602@afternoon,51006,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u0759912@afternoon,51007,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u0985830@afternoon,51008,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u0987142@afternoon,51009,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u0872813@afternoon,51010,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u1524391@afternoon,51011,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u0404113@afternoon,51012,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u1452801@afternoon,51013,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u0744787@afternoon,51014,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u1475679@afternoon,51015,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u1502478@afternoon,51016,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u1478224@afternoon,51017,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u1471389@afternoon,51018,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u1475680@afternoon,51019,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u0000001@afternoon,51025,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u0000002@afternoon,51026,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u0000003@afternoon,51027,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u0000004@afternoon,51028,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u0000005@afternoon,51029,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u0657239@afternoon,51045,1442,131357,allotment,10000,10000,10,10,10,true,true
+Fintech2024,u1351688@afternoon,51046,1442,131357,allotment,10000,10000,10,10,10,true,true
+# holdings -- end
