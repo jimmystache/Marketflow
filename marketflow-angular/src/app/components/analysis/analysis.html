@@ -1,6 +1,92 @@
- <p>Analysis Works!</p>
- <card   
-    title="Back"
-    buttonLabel="Back"
-    (click)="goTo('')"
-    ></card>
+<div class="size-full p-8">
+  <div class="max-w-7xl">
+
+    <button class="back-btn mb-6" (click)="goBack()">
+      ← Back
+    </button>
+
+    <div class="card p-6">
+      <h1 class="site-title">Analysis</h1>
+
+      <!-- TABS -->
+      <div class="tabs">
+        <div 
+          class="tab"
+          [class.active]="activeTab === 'upload'"
+          (click)="setTab('upload')">
+          ⬆ Upload CSV
+        </div>
+
+        <div 
+          class="tab"
+          [class.active]="activeTab === 'server'"
+          (click)="setTab('server')">
+          🖥 Server Sessions
+        </div>
+      </div>
+
+      <!-- UPLOAD TAB -->
+      <div 
+        id="content-upload"
+        class="tab-content"
+        [class.active]="activeTab === 'upload'">
+
+        <label>Upload CSV File</label>
+
+        <div class="upload-box">
+          <label class="upload-label" for="csv-upload">
+            Click to upload CSV file
+          </label>
+
+          <input
+            id="csv-upload"
+            type="file"
+            accept=".csv"
+            (change)="handleFileChoose($event)"
+            hidden
+          />
+
+          <p id="file-info" class="file-info" *ngIf="selectedFile">
+            Selected: {{ selectedFile.name }}
+          </p>
+        </div>
+      </div>
+
+      <!-- SERVER TAB -->
+      <div 
+        id="content-server"
+        class="tab-content"
+        [class.active]="activeTab === 'server'">
+
+        <label>Select Trading Session</label>
+
+        <select
+          class="session-select"
+          [(ngModel)]="selectedSession"
+          (change)="updateSessionDetails()">
+
+          <option value="">Choose a session…</option>
+          <option 
+            *ngFor="let s of sessions" 
+            [value]="s.id">
+            {{ s.name }} ({{ s.traders }} traders)
+          </option>
+        </select>
+
+        <div 
+          class="session-details"
+          *ngIf="currentSession">
+
+          <p><strong>Name:</strong> {{ currentSession.name }}</p>
+          <p><strong>Date:</strong> {{ currentSession.date }}</p>
+          <p><strong>Traders:</strong> {{ currentSession.traders }}</p>
+        </div>
+      </div>
+
+      <button class="analysis-btn" (click)="startAnalysis()">
+        Start Analysis
+      </button>
+    </div>
+
+  </div>
+</div>
