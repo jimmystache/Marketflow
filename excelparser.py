@@ -3,7 +3,11 @@ import os
 import argparse
 import re
 from io import StringIO
-import pandas as pd
+
+try:
+    import pandas as pd
+except Exception:
+    pd = None
 
 
 def extract_section_text(path, section_name):
@@ -62,6 +66,7 @@ def main():
     parser.add_argument("--filter-value", help="Value to match in the filter column (exact match)")
     parser.add_argument("--contains", action="store_true", help="Use substring match for --filter-value")
     parser.add_argument("--rows", type=int, help="If provided with --section, limit output to N rows starting from section top")
+    parser.add_argument("--columns", help="Comma-separated list of columns to keep (order preserved)")
     args = parser.parse_args()
 
     input_file = args.input_file
@@ -72,11 +77,11 @@ def main():
     # If the user asked for a named section, try to extract it from the raw text
     if args.section:
         df = load_section_as_dataframe(input_file, args.section)
-        if df.empty:
-            print(f"Section '{args.section}' is empty in file.")
-            sys.exit(1)
         if df is None:
             print(f"Section '{args.section}' not found in file.")
+            sys.exit(1)
+        if hasattr(df, 'empty') and df.empty:
+            print(f"Section '{args.section}' is empty in file.")
             sys.exit(1)
 
     else:
@@ -84,11 +89,11 @@ def main():
       sys.exit(1)
       
 
-    # Apply optional filtering
+    # Apply optional filtering (only if both filter-column and filter-value provided)
     if args.filter_column and args.filter_value is not None:
         col = args.filter_column
         if col not in df.columns:
-            print(f"Column '{col}' not found in data. Available columns: {', '.join(df.columns[:10])}")
+            print(f"Column '{col}' not found in data. Available columns: {', '.join(list(df.columns)[:10])}")
             sys.exit(1)
 
         if args.contains:
@@ -97,9 +102,23 @@ def main():
             mask = df[col].astype(str) == args.filter_value
 
         df = df[mask]
-
     if args.rows is not None:
         df = df.head(args.rows)
+
+    # Column selection: keep listed columns in the requested order
+    if args.columns:
+        if pd is None:
+            print("pandas is required to select columns. Install with: pip install pandas")
+            sys.exit(1)
+
+        cols = [c.strip() for c in args.columns.split(',') if c.strip()]
+        missing = [c for c in cols if c not in df.columns]
+        if missing:
+            print(f"Requested columns not found: {', '.join(missing)}")
+            print(f"Available columns: {', '.join(list(df.columns)[:50])}")
+            sys.exit(1)
+
+        df = df[cols]
 
     # Print a concise preview
     if pd is not None:
