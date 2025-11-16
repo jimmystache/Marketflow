@@ -8,6 +8,7 @@ try:
     import pandas as pd
 except Exception:
     pd = None
+import json
 
 
 def extract_section_text(path, section_name):
@@ -50,11 +51,6 @@ def load_section_as_dataframe(path, section_name):
     text = extract_section_text(path, section_name)
     if text is None or text.strip() == "":
         return None
-
-    if pd is None:
-        print("pandas is required to parse CSV sections. Install with: pip install pandas")
-        sys.exit(1)
-
     return pd.read_csv(StringIO(text))
 
 
@@ -67,6 +63,8 @@ def main():
     parser.add_argument("--contains", action="store_true", help="Use substring match for --filter-value")
     parser.add_argument("--rows", type=int, help="If provided with --section, limit output to N rows starting from section top")
     parser.add_argument("--columns", help="Comma-separated list of columns to keep (order preserved)")
+    parser.add_argument("--as-list", action="store_true", help="Output selected columns as lists (JSON).")
+    parser.add_argument("--output-json", help="Path to write JSON output (if omitted, prints to stdout).")
     args = parser.parse_args()
 
     input_file = args.input_file
@@ -107,10 +105,6 @@ def main():
 
     # Column selection: keep listed columns in the requested order
     if args.columns:
-        if pd is None:
-            print("pandas is required to select columns. Install with: pip install pandas")
-            sys.exit(1)
-
         cols = [c.strip() for c in args.columns.split(',') if c.strip()]
         missing = [c for c in cols if c not in df.columns]
         if missing:
@@ -119,6 +113,19 @@ def main():
             sys.exit(1)
 
         df = df[cols]
+
+    # Optionally output selected columns as arrays (JSON)
+    if args.as_list:
+        # Build mapping column -> list
+        out = {col: df[col].tolist() for col in df.columns}
+        dumped = json.dumps(out, indent=2, ensure_ascii=False)
+        if args.output_json:
+            with open(args.output_json, 'w', encoding='utf-8') as fh:
+                fh.write(dumped)
+            print(f"Wrote JSON arrays to {args.output_json}")
+        else:
+            print(dumped)
+        return
 
     # Print a concise preview
     if pd is not None:
