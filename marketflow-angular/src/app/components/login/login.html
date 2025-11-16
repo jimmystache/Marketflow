@@ -1,0 +1,101 @@
+<div class="login-container">
+  <div class="login-card">
+    <h1 class="login-title">Welcome to Marketflow</h1>
+    <p class="login-subtitle">Sign in to your account</p>
+
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="login-form">
+      <!-- Account Field -->
+      <div class="form-group">
+        <label for="account" class="form-label">Account</label>
+        <input
+          id="account"
+          type="text"
+          formControlName="account"
+          class="form-input"
+          [class.error]="hasFieldError('account')"
+          placeholder="Enter your account"
+          [disabled]="isLoading()"
+        />
+        <span *ngIf="hasFieldError('account')" class="error-message">
+          {{ getFieldError('account') }}
+        </span>
+      </div>
+
+      <!-- Email Field -->
+      <div class="form-group">
+        <label for="email" class="form-label">Email</label>
+        <input
+          id="email"
+          type="email"
+          formControlName="email"
+          class="form-input"
+          [class.error]="hasFieldError('email')"
+          placeholder="Enter your email"
+          [disabled]="isLoading()"
+        />
+        <span *ngIf="hasFieldError('email')" class="error-message">
+          {{ getFieldError('email') }}
+        </span>
+      </div>
+
+      <!-- Password Field -->
+      <div class="form-group">
+        <label for="password" class="form-label">Password</label>
+        <input
+          id="password"
+          type="password"
+          formControlName="password"
+          class="form-input"
+          [class.error]="hasFieldError('password')"
+          placeholder="Enter your password"
+          [disabled]="isLoading()"
+        />
+        <span *ngIf="hasFieldError('password')" class="error-message">
+          {{ getFieldError('password') }}
+        </span>
+      </div>
+
+      <!-- Error Message Box -->
+      <div *ngIf="errorMessage()" class="error-box">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="error-icon"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+        <span>{{ errorMessage() }}</span>
+      </div>
+
+      <!-- Submit Button -->
+      <button
+        type="submit"
+        class="submit-button"
+        [disabled]="isLoading() || loginForm.invalid"
+      >
+        <span *ngIf="!isLoading()">Sign In</span>
+        <span *ngIf="isLoading()" class="loading-content">
+          <svg class="spinner" viewBox="0 0 24 24">
+            <circle
+              class="spinner-circle"
+              cx="12"
+              cy="12"
+              r="10"
+              fill="none"
+              stroke-width="2"
+            />
+          </svg>
+          Signing in...
+        </span>
+      </button>
+    </form>
+  </div>
+</div>
+
