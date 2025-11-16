@@ -27,7 +27,7 @@ export class Analysis {
   }
 
   goToDashboard() {
-    this.router.navigate(['analysis-dashboard']); 
+    this.router.navigate(['/dashboard']); 
   }
 
   setTab(tab: 'upload' | 'server') {
@@ -42,6 +42,11 @@ export class Analysis {
       alert("Please choose a valid CSV file.");
       event.target.value = "";
     }
+  }
+
+  triggerFileUpload() {
+    const fileInput = document.getElementById('csv-upload') as HTMLInputElement;
+    fileInput?.click();
   }
 
   updateSessionDetails() {

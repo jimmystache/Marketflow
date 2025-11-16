@@ -1,92 +1,110 @@
-<div class="size-full p-8">
-  <div class="max-w-7xl">
-
-    <button class="back-btn mb-6" (click)="goBack()">
-      ← Back
+<div class="size-full p-8 bg-green-50">
+  <div class="max-w-2xl mx-auto">
+    <button class="back-button mb-6" (click)="goBack()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 0.5rem;">
+        <path d="m12 19-7-7 7-7"/>
+        <path d="M19 12H5"/>
+      </svg>
+      Back
     </button>
 
-    <div class="card p-6">
-      <h1 class="site-title">Analysis</h1>
+    <div class="card p-8 bg-white">
+      <h1 class="mb-6">Analysis</h1>
 
       <!-- TABS -->
-      <div class="tabs">
+      <div class="tabs-container">
         <div 
-          class="tab"
+          class="tab-item"
           [class.active]="activeTab === 'upload'"
           (click)="setTab('upload')">
-          ⬆ Upload CSV
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 0.5rem;">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          Upload CSV
         </div>
 
         <div 
-          class="tab"
+          class="tab-item"
           [class.active]="activeTab === 'server'"
           (click)="setTab('server')">
-          🖥 Server Sessions
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 0.5rem;">
+            <rect width="20" height="8" x="2" y="2" rx="2" ry="2"/>
+            <rect width="20" height="8" x="2" y="14" rx="2" ry="2"/>
+            <line x1="6" y1="6" x2="6.01" y2="6"/>
+            <line x1="6" y1="18" x2="6.01" y2="18"/>
+          </svg>
+          Server Sessions
         </div>
       </div>
 
       <!-- UPLOAD TAB -->
       <div 
-        id="content-upload"
         class="tab-content"
         [class.active]="activeTab === 'upload'">
-
-        <label>Upload CSV File</label>
-
-        <div class="upload-box">
-          <label class="upload-label" for="csv-upload">
-            Click to upload CSV file
-          </label>
-
-          <input
-            id="csv-upload"
-            type="file"
-            accept=".csv"
-            (change)="handleFileChoose($event)"
-            hidden
-          />
-
-          <p id="file-info" class="file-info" *ngIf="selectedFile">
-            Selected: {{ selectedFile.name }}
-          </p>
+        <div class="space-y-2">
+          <label class="form-label">Upload CSV File</label>
+          <div class="upload-area" (click)="triggerFileUpload()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <input
+              id="csv-upload"
+              type="file"
+              accept=".csv"
+              (change)="handleFileChoose($event)"
+              style="display: none;"
+            />
+            <label for="csv-upload" class="upload-label">
+              Click to upload CSV file
+            </label>
+            <p class="file-selected" *ngIf="selectedFile">
+              Selected: {{ selectedFile.name }}
+            </p>
+          </div>
         </div>
       </div>
 
       <!-- SERVER TAB -->
       <div 
-        id="content-server"
         class="tab-content"
         [class.active]="activeTab === 'server'">
-
-        <label>Select Trading Session</label>
-
-        <select
-          class="session-select"
-          [(ngModel)]="selectedSession"
-          (change)="updateSessionDetails()">
-
-          <option value="">Choose a session…</option>
-          <option 
-            *ngFor="let s of sessions" 
-            [value]="s.id">
-            {{ s.name }} ({{ s.traders }} traders)
-          </option>
-        </select>
-
-        <div 
-          class="session-details"
-          *ngIf="currentSession">
-
-          <p><strong>Name:</strong> {{ currentSession.name }}</p>
-          <p><strong>Date:</strong> {{ currentSession.date }}</p>
-          <p><strong>Traders:</strong> {{ currentSession.traders }}</p>
+        <div class="space-y-2">
+          <label class="form-label">Select Trading Session</label>
+          <select
+            class="form-select"
+            [(ngModel)]="selectedSession"
+            (change)="updateSessionDetails()">
+            <option value="">Choose a session to analyze</option>
+            <option 
+              *ngFor="let s of sessions" 
+              [value]="s.id">
+              {{ s.name }} ({{ s.traders }} traders)
+            </option>
+          </select>
+          
+          <div 
+            class="session-details"
+            *ngIf="currentSession">
+            <p class="details-label">Session Details:</p>
+            <div class="details-content">
+              <p class="detail-item"><span class="detail-label">Name:</span> {{ currentSession.name }}</p>
+              <p class="detail-item"><span class="detail-label">Date:</span> {{ currentSession.date }}</p>
+              <p class="detail-item"><span class="detail-label">Traders:</span> {{ currentSession.traders }}</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      <button class="analysis-btn" (click)="startAnalysis()">
+      <button 
+        class="start-analysis-btn" 
+        (click)="startAnalysis()"
+        [disabled]="(activeTab === 'upload' && !selectedFile) || (activeTab === 'server' && !selectedSession)">
         Start Analysis
       </button>
     </div>
-
   </div>
 </div>
