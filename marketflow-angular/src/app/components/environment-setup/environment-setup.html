@@ -1,6 +1,56 @@
-<p>environment-setup works!</p>
- <card   
-    title="Back"
-    buttonLabel="Back"
-    (click)="goTo('')"
-    ></card>
+<div class="environment-setup-container">
+  <div class="form-wrapper">
+    <h1 class="form-title">Environment Setup</h1>
+    
+    <form class="environment-form" (ngSubmit)="onSubmit()">
+      <div class="form-group">
+        <label for="environmentName">Environment Name</label>
+        <input 
+          type="text" 
+          id="environmentName" 
+          name="environmentName"
+          [(ngModel)]="environmentName"
+          required
+        >
+      </div>
+
+      <div class="form-group">
+        <label for="description">Description</label>
+        <input 
+          type="text" 
+          id="description" 
+          name="description"
+          [(ngModel)]="description"
+          required
+        >
+      </div>
+
+      <div class="form-group">
+        <label for="apiKey">API Key</label>
+        <input 
+          type="text" 
+          id="apiKey" 
+          name="apiKey"
+          [(ngModel)]="apiKey"
+          required
+        >
+      </div>
+
+      <div class="form-group">
+        <label for="endpointUrl">Endpoint URL</label>
+        <input 
+          type="url" 
+          id="endpointUrl" 
+          name="endpointUrl"
+          [(ngModel)]="endpointUrl"
+          required
+        >
+      </div>
+
+      <button type="submit" class="create-btn">Create Environment</button>
+    </form>
+
+      <button (click)="goTo('')">Back</button>
+    
+  </div>
+</div>

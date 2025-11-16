@@ -1,0 +1,110 @@
+
+
+body {
+  background: var(--bg);
+  font-family: Inter, system-ui, sans-serif;
+  color: #c1ffd3;
+}
+
+/* Buttons */
+button,
+.back-btn {
+  background: transparent;
+  border: 1px solid rgba(15,118,110,0.08);
+  color: var(--accent);
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+button:hover,
+.back-btn:hover {
+  background: rgba(15,118,110,0.06);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+
+
+.environment-setup-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 2rem;
+  background: var(--bg);
+}
+
+.form-wrapper {
+  width: 100%;
+  max-width: 500px;
+}
+
+.form-title {
+  font-family: Inter, sans-serif;
+  font-weight: 600;
+  font-size: 2rem;
+  color: var(--accent);
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.environment-form {
+  background: var(--surface);
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  margin-bottom: 1.5rem;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--accent);
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid rgba(15, 118, 110, 0.15);
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: Inter, system-ui, sans-serif;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.create-btn {
+  width: 100%;
+  padding: 0.875rem;
+  background: var(--accent);
+  border: none;
+  color: white;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.create-btn:hover {
+  background: #0b5d55;
+}
