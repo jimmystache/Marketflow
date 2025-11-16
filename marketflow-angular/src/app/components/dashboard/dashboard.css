@@ -1,0 +1,19 @@
+.dashboard-container {
+  min-height: 100vh;
+  padding: 2rem;
+  background: var(--green-50);
+}
+
+.dashboard-container h1 {
+  font-size: 2.5rem;
+  font-weight: 500;
+  color: var(--green-600);
+  margin-bottom: 1rem;
+}
+
+.dashboard-container p {
+  color: var(--gray-600);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
