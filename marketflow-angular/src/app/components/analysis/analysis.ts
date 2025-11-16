@@ -27,7 +27,7 @@ export class Analysis {
   }
 
   goToDashboard() {
-    this.router.navigate(['bot-management']); 
+    this.router.navigate(['analysis-dashboard']); 
   }
 
   setTab(tab: 'upload' | 'server') {
@@ -59,5 +59,6 @@ export class Analysis {
       return;
     }
     console.log("Starting analysis...");
+    this.goToDashboard();
   }
 }

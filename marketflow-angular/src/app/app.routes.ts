@@ -4,12 +4,14 @@ import { Home } from './components/home/home';
 import { EnvironmentSetup } from './components/environment-setup/environment-setup';
 import { Analysis } from './components/analysis/analysis';
 import { BotManagement } from './components/bot-management/bot-management';
+import { AnalysisDashboard } from './components/analysis-dashboard/analysis-dashboard';
 
 export const routes: Routes = [
   { path: '', component: Home },
   { path: 'environment-setup', component: EnvironmentSetup },
   { path: 'analysis', component: Analysis },
   { path: 'bot-management', component: BotManagement },
+  { path: 'analysis-dashboard', component: AnalysisDashboard },
 ];
 
 @NgModule({
