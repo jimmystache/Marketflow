@@ -1,36 +1,112 @@
 import sys
 import os
+import argparse
+import re
+from io import StringIO
 import pandas as pd
 
 
-def main():
-    print("File Parser (CSV / Excel)")
-    if len(sys.argv) != 2:
-        print("Usage: python excelparser.py <file.csv|file.xlsx>")
+def extract_section_text(path, section_name):
+    """Return the CSV text for a named section (between markers).
+
+    Markers are lines like: `# holdings -- begin` and `# holdings -- end`.
+    The function returns the lines between the begin and end markers (exclusive
+    of the markers) joined as a single string, or None if the section wasn't found.
+    """
+    begin_re = re.compile(rf"^#\s*{re.escape(section_name)}\s*--\s*begin", re.IGNORECASE)
+    end_re = re.compile(rf"^#\s*{re.escape(section_name)}\s*--\s*end", re.IGNORECASE)
+
+    with open(path, encoding='utf-8') as f:
+        lines = f.readlines()
+
+    start_idx = None
+    end_idx = None
+    for i, line in enumerate(lines):
+        if start_idx is None and begin_re.match(line.strip()):
+            start_idx = i + 1
+            continue
+        if start_idx is not None and end_re.match(line.strip()):
+            end_idx = i
+            break
+
+    if start_idx is None:
+        return None
+
+    section_lines = lines[start_idx:end_idx]
+    # Remove leading/trailing blank lines
+    while section_lines and section_lines[0].strip() == "":
+        section_lines.pop(0)
+    while section_lines and section_lines[-1].strip() == "":
+        section_lines.pop()
+
+    return "".join(section_lines)
+
+
+def load_section_as_dataframe(path, section_name):
+    text = extract_section_text(path, section_name)
+    if text is None or text.strip() == "":
+        return None
+
+    if pd is None:
+        print("pandas is required to parse CSV sections. Install with: pip install pandas")
         sys.exit(1)
 
-    input_file = sys.argv[1]
+    return pd.read_csv(StringIO(text))
 
+
+def main():
+    parser = argparse.ArgumentParser(description="Parse CSV or Excel files and extract sections.")
+    parser.add_argument("input_file", help="Path to a CSV or Excel file")
+    parser.add_argument("--section", help="Section name to extract (e.g. 'orders' or 'holdings')")
+    parser.add_argument("--filter-column", help="Column name to filter after extracting section")
+    parser.add_argument("--filter-value", help="Value to match in the filter column (exact match)")
+    parser.add_argument("--contains", action="store_true", help="Use substring match for --filter-value")
+    parser.add_argument("--rows", type=int, help="If provided with --section, limit output to N rows starting from section top")
+    args = parser.parse_args()
+
+    input_file = args.input_file
     if not os.path.exists(input_file):
         print(f"File not found: {input_file}")
         sys.exit(1)
 
-    _, ext = os.path.splitext(input_file)
-    ext = ext.lower()
-
-    try:
-        if ext == ".csv":
-            df = pd.read_csv(input_file)
-        else:
-            print(f"Unsupported file extension: {ext}. Only .csv files are supported.")
+    # If the user asked for a named section, try to extract it from the raw text
+    if args.section:
+        df = load_section_as_dataframe(input_file, args.section)
+        if df.empty:
+            print(f"Section '{args.section}' is empty in file.")
             sys.exit(1)
-        # Print a small preview if the frame is large
-        with pd.option_context('display.max_rows', 20, 'display.max_columns', 20):
-            print(df)
+        if df is None:
+            print(f"Section '{args.section}' not found in file.")
+            sys.exit(1)
 
-    except Exception as e:
-        print(f"An error occurred while reading '{input_file}': {e}")
-        sys.exit(1)
+    else:
+      print(f"No section specified. Please provide a section name using --section.") 
+      sys.exit(1)
+      
+
+    # Apply optional filtering
+    if args.filter_column and args.filter_value is not None:
+        col = args.filter_column
+        if col not in df.columns:
+            print(f"Column '{col}' not found in data. Available columns: {', '.join(df.columns[:10])}")
+            sys.exit(1)
+
+        if args.contains:
+            mask = df[col].astype(str).str.contains(args.filter_value, na=False)
+        else:
+            mask = df[col].astype(str) == args.filter_value
+
+        df = df[mask]
+
+    if args.rows is not None:
+        df = df.head(args.rows)
+
+    # Print a concise preview
+    if pd is not None:
+        with pd.option_context('display.max_rows', 200, 'display.max_columns', 50):
+            print(df)
+    else:
+        print(df)
 
 
 if __name__ == "__main__":
