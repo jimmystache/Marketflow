@@ -8,4 +8,25 @@
       {{ orders | json }}
     </pre>
   </div>
+
+  <div *ngIf="csv">
+    <h2>Trades CSV Output</h2>
+    <div *ngIf="csvRows && csvRows.length">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th *ngFor="let h of csvRows[0]" style="border-bottom:1px solid #ddd;padding:8px;text-align:left">{{ h }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of csvRows.slice(1)">
+            <td *ngFor="let cell of row" style="border-bottom:1px solid #f0f0f0;padding:8px">{{ cell }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div *ngIf="!csvRows || csvRows.length === 0">
+      <pre style="white-space:pre-wrap; background:#f3f3f3;padding:1em;border-radius:8px">{{ csv }}</pre>
+    </div>
+  </div>
 </div>

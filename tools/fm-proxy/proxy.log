@@ -1,0 +1,6 @@
+
+> fm-proxy@0.1.0 start
+> node index.js
+
+fm-proxy listening on 3000
+Using local credential file at /Users/vivekanandh/Projects/marketflow/tools/fm-proxy/credential

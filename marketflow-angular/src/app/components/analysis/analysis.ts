@@ -28,6 +28,9 @@ export class Analysis implements OnInit {
   isLoadingSessions = false;
   marketplaceError: string | null = null;
   sessionsError: string | null = null;
+  // Loading state while running the local proxy / fm-manager.jar
+  isRunningAnalysis: boolean = false;
+  analysisError: string | null = null;
 
   private apiBaseUrl = 'https://fm-data.herokuapp.com/api';
 
@@ -181,8 +184,34 @@ export class Analysis implements OnInit {
       alert("Please select a server session.");
       return;
     }
-    // Clear any remote API logic here — simply navigate to the dashboard.
-    console.log("Starting analysis (no remote fetch)...");
+    // For server tab: call local proxy to run fm-manager.jar and return CSV
+    if (this.activeTab === 'server') {
+      const proxyUrl = 'http://localhost:3000/run-trades';
+      const payload = {
+        marketplaceId: this.selectedMarketplace,
+        sessionId: this.selectedSession,
+        // Send token so the proxy can write credential file (assumption)
+        token: this.authService.getToken()
+      };
+
+      this.isRunningAnalysis = true;
+      this.analysisError = null;
+
+      this.http.post(proxyUrl, payload, { responseType: 'text' as 'json' }).subscribe(
+        (csv: any) => {
+          this.isRunningAnalysis = false;
+          // Navigate to dashboard and pass CSV text
+          this.router.navigate(['/dashboard'], { state: { csv } });
+        },
+        (err: any) => {
+          console.error('Proxy error:', err);
+          this.isRunningAnalysis = false;
+          this.analysisError = 'Failed to run fm-manager locally: ' + (err?.error?.error || err?.message || 'unknown');
+        }
+      );
+      return;
+    }
+    // Default: upload tab
     this.goToDashboard();
   }
 }

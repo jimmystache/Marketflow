@@ -45,7 +45,7 @@
         [class.active]="activeTab === 'upload'">
         <div class="space-y-2">
           <label class="form-label">Upload CSV File</label>
-          <div class="upload-area" (click)="triggerFileUpload()">
+          <div class="upload-area" (click)="!isRunningAnalysis && triggerFileUpload()" [class.disabled]="isRunningAnalysis">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="17 8 12 3 7 8"/>
@@ -56,6 +56,7 @@
               type="file"
               accept=".csv"
               (change)="handleFileChoose($event)"
+              [disabled]="isRunningAnalysis"
               style="display: none;"
             />
             <label for="csv-upload" class="upload-label">
@@ -72,6 +73,11 @@
       <div 
         class="tab-content"
         [class.active]="activeTab === 'server'">
+        <!-- overlay spinner while running analysis -->
+        <div class="analysis-overlay" *ngIf="isRunningAnalysis">
+          <div class="spinner"></div>
+          <p class="overlay-text">Running analysis — this may take a few moments...</p>
+        </div>
         <div class="space-y-2">
           <!-- MARKETPLACE DROPDOWN -->
           <div class="marketplace-section">
@@ -86,7 +92,7 @@
               class="form-select"
               [(ngModel)]="selectedMarketplace"
               (change)="onMarketplaceChange()"
-              [disabled]="isLoadingMarketplaces || marketplaces.length === 0">
+              [disabled]="isRunningAnalysis || isLoadingMarketplaces || marketplaces.length === 0">
               <option value="">-- Choose a marketplace --</option>
               <option 
                 *ngFor="let m of marketplaces" 
@@ -108,7 +114,7 @@
             class="form-select"
             [(ngModel)]="selectedSession"
             (change)="updateSessionDetails()"
-            [disabled]="!selectedMarketplace || isLoadingSessions">
+            [disabled]="isRunningAnalysis || !selectedMarketplace || isLoadingSessions">
             <option value="">
               {{ selectedMarketplace ? (isLoadingSessions ? 'Loading sessions...' : 'Choose a session to analyze') : 'Select a marketplace first' }}
             </option>
@@ -132,12 +138,19 @@
         </div>
       </div>
 
-      <button 
-        class="start-analysis-btn" 
-        (click)="startAnalysis()"
-        [disabled]="(activeTab === 'upload' && !selectedFile) || (activeTab === 'server' && (!selectedMarketplace || !selectedSession))">
-        Start Analysis
-      </button>
+      <div class="button-row">
+        <button 
+          class="start-analysis-btn" 
+          (click)="startAnalysis()"
+          [disabled]="isRunningAnalysis || (activeTab === 'upload' && !selectedFile) || (activeTab === 'server' && (!selectedMarketplace || !selectedSession))">
+          <span *ngIf="!isRunningAnalysis">Start Analysis</span>
+          <span *ngIf="isRunningAnalysis">Running...</span>
+        </button>
+      </div>
+
+      <div *ngIf="analysisError" class="error-text" style="margin-top:0.75rem;">
+        {{ analysisError }}
+      </div>
     </div>
   </div>
 </div>
