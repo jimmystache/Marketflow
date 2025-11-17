@@ -73,16 +73,49 @@
         class="tab-content"
         [class.active]="activeTab === 'server'">
         <div class="space-y-2">
+          <!-- MARKETPLACE DROPDOWN -->
+          <div class="marketplace-section">
+            <label class="form-label">Select Marketplace</label>
+            <div *ngIf="isLoadingMarketplaces" class="loading-text">
+              Loading marketplaces...
+            </div>
+            <div *ngIf="marketplaceError" class="error-text">
+              {{ marketplaceError }}
+            </div>
+            <select
+              class="form-select"
+              [(ngModel)]="selectedMarketplace"
+              (change)="onMarketplaceChange()"
+              [disabled]="isLoadingMarketplaces || marketplaces.length === 0">
+              <option value="">-- Choose a marketplace --</option>
+              <option 
+                *ngFor="let m of marketplaces" 
+                [value]="m.id">
+                {{ m.name || 'Marketplace ' + m.id }}
+              </option>
+            </select>
+          </div>
+
+          <!-- SESSION DROPDOWN -->
           <label class="form-label">Select Trading Session</label>
+          <div *ngIf="isLoadingSessions" class="loading-text">
+            Loading sessions...
+          </div>
+          <div *ngIf="sessionsError" class="error-text">
+            {{ sessionsError }}
+          </div>
           <select
             class="form-select"
             [(ngModel)]="selectedSession"
-            (change)="updateSessionDetails()">
-            <option value="">Choose a session to analyze</option>
+            (change)="updateSessionDetails()"
+            [disabled]="!selectedMarketplace || isLoadingSessions">
+            <option value="">
+              {{ selectedMarketplace ? (isLoadingSessions ? 'Loading sessions...' : 'Choose a session to analyze') : 'Select a marketplace first' }}
+            </option>
             <option 
               *ngFor="let s of sessions" 
               [value]="s.id">
-              {{ s.name }} ({{ s.traders }} traders)
+              {{ s.name || 'Session ' + s.id }} ({{ s.traders || 0 }} traders)
             </option>
           </select>
           
@@ -102,7 +135,7 @@
       <button 
         class="start-analysis-btn" 
         (click)="startAnalysis()"
-        [disabled]="(activeTab === 'upload' && !selectedFile) || (activeTab === 'server' && !selectedSession)">
+        [disabled]="(activeTab === 'upload' && !selectedFile) || (activeTab === 'server' && (!selectedMarketplace || !selectedSession))">
         Start Analysis
       </button>
     </div>
