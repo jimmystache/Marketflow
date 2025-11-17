@@ -1,11 +1,10 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { Card } from '../card/card'
 
 @Component({
   selector: 'app-environment-setup',
-  imports: [Card, FormsModule],
+  imports: [FormsModule],
   templateUrl: './environment-setup.html',
   styleUrl: './environment-setup.css',
 })
