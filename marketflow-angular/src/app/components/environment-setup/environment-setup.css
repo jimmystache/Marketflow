@@ -1,45 +1,12 @@
 
 
-body {
-  background: var(--bg);
-  font-family: Inter, system-ui, sans-serif;
-  color: #c1ffd3;
-}
-
-/* Buttons */
-button,
-.back-btn {
-  background: transparent;
-  border: 1px solid rgba(15,118,110,0.08);
-  color: var(--accent);
-  padding: 0.5rem 0.75rem;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 15px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-button:hover,
-.back-btn:hover {
-  background: rgba(15,118,110,0.06);
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-
-
 .environment-setup-container {
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
   padding: 2rem;
-  background: var(--bg);
+  background: var(--green-50);
 }
 
 .form-wrapper {
@@ -47,64 +14,127 @@ button:disabled {
   max-width: 500px;
 }
 
-.form-title {
-  font-family: Inter, sans-serif;
-  font-weight: 600;
+.environment-title {
   font-size: 2rem;
-  color: var(--accent);
+  font-weight: 500;
+  color: var(--green-600);
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.environment-subtitle {
+  font-size: 0.875rem;
+  color: var(--gray-600);
   text-align: center;
   margin-bottom: 2rem;
 }
 
+.environment-card {
+  background: var(--white);
+  border-radius: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 2.5rem;
+  transition: box-shadow 300ms ease, transform 300ms ease;
+}
+
+.environment-card:hover {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
 .environment-form {
-  background: var(--surface);
-  padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
   margin-bottom: 1.5rem;
 }
 
 .form-group {
-  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  color: var(--accent);
+.form-label {
+  font-size: 0.875rem;
   font-weight: 500;
-  font-size: 0.9rem;
+  color: #111827;
+  margin-bottom: 0.375rem;
 }
 
-.form-group input {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid rgba(15, 118, 110, 0.15);
-  border-radius: 8px;
+.form-input {
+  padding: 0.75rem 1rem;
   font-size: 1rem;
+  border: 1px solid var(--gray-100);
+  border-radius: 0.625rem;
+  background: var(--white);
+  color: #111827;
   font-family: Inter, system-ui, sans-serif;
-  transition: border-color 0.2s;
-  box-sizing: border-box;
+  transition: border-color 300ms ease, box-shadow 300ms ease;
 }
 
-.form-group input:focus {
+.form-input:hover {
+  border-color: var(--green-200);
+}
+
+.form-input:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--green-600);
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
 }
 
-.create-btn {
-  width: 100%;
-  padding: 0.875rem;
-  background: var(--accent);
-  border: none;
-  color: white;
-  border-radius: 8px;
+.submit-button {
+  padding: 0.75rem 1rem;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 500;
+  color: var(--white);
+  background: var(--green-600);
+  border: 1px solid var(--green-600);
+  border-radius: 0.625rem;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background-color 300ms ease, border-color 300ms ease, transform 300ms ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.create-btn:hover {
-  background: #0b5d55;
+.submit-button:hover {
+  background: var(--green-700);
+  border-color: var(--green-700);
+  transform: scale(1.05);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.submit-button:active {
+  transform: scale(1.02);
+}
+
+.submit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.back-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--green-600);
+  background: var(--white);
+  border: 1px solid var(--green-200);
+  border-radius: 0.625rem;
+  cursor: pointer;
+  transition: background-color 300ms ease, border-color 300ms ease, transform 300ms ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.back-button:hover {
+  background: var(--green-50);
+  border-color: var(--green-300);
+  transform: translateX(-2px);
+}
+
+.back-button:active {
+  transform: translateX(-1px);
 }
