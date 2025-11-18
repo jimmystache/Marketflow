@@ -17,3 +17,29 @@
   line-height: 1.5;
 }
 
+/* No trades message styling */
+.no-trades-message {
+  background: #e0f2fe;
+  border: 2px solid #0284c7;
+  border-radius: 0.75rem;
+  padding: 2rem;
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+.no-trades-message .message-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.no-trades-message h2 {
+  color: #0c4a6e;
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.no-trades-message p {
+  color: #0c4a6e;
+  font-size: 1rem;
+  line-height: 1.5;
+}

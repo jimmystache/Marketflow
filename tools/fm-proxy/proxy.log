@@ -4,9 +4,11 @@
 
 fm-proxy listening on 3000
 Using local credential file at /Users/vivekanandh/Projects/marketflow/tools/fm-proxy/credential
+fm-manager exited with code 1. stderr: Cannot invoke "java.util.List.isEmpty()" because "sessionOrders" is null
+
 Using local credential file at /Users/vivekanandh/Projects/marketflow/tools/fm-proxy/credential
+fm-manager exited with code 1. stderr: Cannot invoke "java.util.List.isEmpty()" because "sessionOrders" is null
+
 Using local credential file at /Users/vivekanandh/Projects/marketflow/tools/fm-proxy/credential
-Using local credential file at /Users/vivekanandh/Projects/marketflow/tools/fm-proxy/credential
-Using local credential file at /Users/vivekanandh/Projects/marketflow/tools/fm-proxy/credential
-Using local credential file at /Users/vivekanandh/Projects/marketflow/tools/fm-proxy/credential
-Using local credential file at /Users/vivekanandh/Projects/marketflow/tools/fm-proxy/credential
+fm-manager exited with code 1. stderr: Cannot invoke "java.util.List.isEmpty()" because "sessionOrders" is null
+

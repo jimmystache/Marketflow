@@ -2,6 +2,13 @@
   <h1>Dashboard</h1>
   <p>Welcome to your Marketflow dashboard. You have successfully logged in.</p>
 
+  <!-- No trades message -->
+  <div *ngIf="message" class="no-trades-message">
+    <div class="message-icon">ℹ️</div>
+    <h2>{{ message }}</h2>
+    <p>This session did not generate any trade records. Please select a different session or marketplace to view trade data.</p>
+  </div>
+
   <div *ngIf="orders">
     <h2>Orders for Selected Session</h2>
     <pre style="max-width:100%;overflow:auto;background:#f3f3f3;padding:1em;border-radius:8px;">

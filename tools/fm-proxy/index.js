@@ -84,12 +84,39 @@ app.post('/run-trades', async (req, res) => {
 
     java.on('close', (code) => {
       if (code === 0) {
-        // Success — return CSV text
+        // Success — check if stdout is empty (no trades for this session)
+        const trimmedStdout = stdout.trim();
+        if (!trimmedStdout || trimmedStdout === '') {
+          // Empty response: no trades were found for this session
+          const message = 'This session did not have any application trades.';
+          res.setHeader('Content-Type', 'application/json');
+          return res.status(200).json({ message, trades: [] });
+        }
+        // CSV data returned — send as text/csv
         res.setHeader('Content-Type', 'text/csv');
         return res.status(200).send(stdout);
       }
-      // Failure — return stderr
-      return res.status(500).json({ error: 'fm-manager exited with code ' + code, details: stderr || stdout });
+      // Failure — fm-manager exited with non-zero code
+      const errorDetails = stderr || stdout || 'Unknown error';
+      console.error(`fm-manager exited with code ${code}. stderr: ${errorDetails}`);
+      
+      // Check for common error patterns and provide friendly messages
+      let userMessage = 'Unable to retrieve trades for this session.';
+      if (errorDetails.includes('NullPointerException') || errorDetails.includes('sessionOrders')) {
+        userMessage = 'Session not found or has invalid data. Please verify the marketplace and session IDs.';
+      } else if (errorDetails.includes('Authentication') || errorDetails.includes('401') || errorDetails.includes('Unauthorized')) {
+        userMessage = 'Authentication failed. Please check your credentials.';
+      } else if (errorDetails.includes('404') || errorDetails.includes('Not Found')) {
+        userMessage = 'Marketplace or session not found. Please select a valid marketplace and session.';
+      }
+      
+      const errorResponse = { 
+        error: userMessage, 
+        details: errorDetails,
+        exitCode: code 
+      };
+      res.setHeader('Content-Type', 'application/json');
+      return res.status(500).json(errorResponse);
     });
   } catch (err) {
     console.error('Error in /run-trades:', err);

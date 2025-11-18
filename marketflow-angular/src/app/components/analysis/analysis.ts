@@ -197,16 +197,71 @@ export class Analysis implements OnInit {
       this.isRunningAnalysis = true;
       this.analysisError = null;
 
+      // First try to get response as text (CSV)
       this.http.post(proxyUrl, payload, { responseType: 'text' as 'json' }).subscribe(
-        (csv: any) => {
+        (response: any) => {
           this.isRunningAnalysis = false;
-          // Navigate to dashboard and pass CSV text
-          this.router.navigate(['/dashboard'], { state: { csv } });
+          try {
+            // Try to parse as JSON (for "no trades" message or error)
+            const jsonResponse = JSON.parse(response);
+            if (jsonResponse.message) {
+              // "No trades" response
+              this.router.navigate(['/dashboard'], { state: { message: jsonResponse.message, trades: jsonResponse.trades || [] } });
+            } else if (jsonResponse.error) {
+              // Error response from proxy (shouldn't reach here normally, but handle it)
+              this.analysisError = jsonResponse.error;
+            } else {
+              // Unexpected JSON, treat as CSV
+              this.router.navigate(['/dashboard'], { state: { csv: response } });
+            }
+          } catch (parseErr) {
+            // Response is CSV text
+            this.router.navigate(['/dashboard'], { state: { csv: response } });
+          }
         },
         (err: any) => {
           console.error('Proxy error:', err);
           this.isRunningAnalysis = false;
-          this.analysisError = 'Failed to run fm-manager locally: ' + (err?.error?.error || err?.message || 'unknown');
+          console.log('Error details - err.error type:', typeof err.error, 'value:', err.error);
+          console.log('Error details - err.status:', err.status);
+          
+          // Try to extract user-friendly error message from proxy response
+          let errorMsg = 'Failed to retrieve trades data.';
+          
+          if (err?.error) {
+            try {
+              // The error response body is in err.error
+              let errorObj = err.error;
+              
+              // If err.error is a string, try to parse it as JSON
+              if (typeof err.error === 'string') {
+                console.log('Parsing error string as JSON:', err.error);
+                try {
+                  errorObj = JSON.parse(err.error);
+                  console.log('Parsed JSON:', errorObj);
+                } catch (parseErr) {
+                  // It's just a plain string error, use it directly
+                  console.log('Failed to parse, using as plain string');
+                  errorMsg = err.error;
+                }
+              }
+              
+              // If we have a parsed object, extract the friendly error message
+              if (typeof errorObj === 'object' && errorObj?.error) {
+                console.log('Extracted error message:', errorObj.error);
+                errorMsg = errorObj.error;
+              }
+            } catch (e) {
+              console.error('Exception while parsing error:', e);
+              // Fallback: use the raw error if anything goes wrong
+              errorMsg = typeof err.error === 'string' ? err.error : 'Failed to run fm-manager locally';
+            }
+          } else if (err?.message) {
+            errorMsg = err.message;
+          }
+          
+          console.log('Final error message to display:', errorMsg);
+          this.analysisError = errorMsg;
         }
       );
       return;
