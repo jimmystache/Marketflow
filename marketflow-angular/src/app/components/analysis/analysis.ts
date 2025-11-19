@@ -16,6 +16,7 @@ export class Analysis implements OnInit {
   activeTab: 'upload' | 'server' = 'upload';
   selectedFile: File | null = null;
   selectedMarketplace: string = '';
+  selectedMarketplaceName: string = '';
   selectedSession: string = '';
   currentSession: any = null;
   
@@ -85,6 +86,31 @@ export class Analysis implements OnInit {
   }
 
   /**
+   * Fetch a single marketplace by ID to get its name
+   */
+  private fetchMarketplaceNameById(marketplaceId: string) {
+    const token = this.authService.getToken();
+    if (!token) return;
+
+    const url = `${this.apiBaseUrl}/marketplaces/${marketplaceId}?format=application/json`;
+    const headers = new HttpHeaders({
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`
+    });
+
+    this.http.get<any>(url, { headers }).subscribe(
+      (data: any) => {
+        this.selectedMarketplaceName = data.name || data.id || '';
+        console.log('Fetched marketplace name:', this.selectedMarketplaceName);
+      },
+      (error: any) => {
+        console.error('Error fetching marketplace by ID:', error);
+        this.selectedMarketplaceName = this.selectedMarketplace;
+      }
+    );
+  }
+
+  /**
    * Handle marketplace selection
    * Clears session selection when marketplace changes and fetches new sessions
    */
@@ -93,6 +119,10 @@ export class Analysis implements OnInit {
     this.currentSession = null;
     this.sessions = [];
     this.sessionsError = null;
+    
+    // Find and store the full marketplace name
+    const marketplace = this.marketplaces.find(m => m.id === this.selectedMarketplace);
+    this.selectedMarketplaceName = marketplace ? marketplace.name : '';
     
     if (this.selectedMarketplace) {
       this.fetchSessionsForMarketplace(this.selectedMarketplace);
@@ -184,6 +214,19 @@ export class Analysis implements OnInit {
       alert("Please select a server session.");
       return;
     }
+    
+    // Ensure marketplace name is set
+    if (this.activeTab === 'server') {
+      const marketplace = this.marketplaces.find(m => m.id === this.selectedMarketplace);
+      if (marketplace && marketplace.name) {
+        this.selectedMarketplaceName = marketplace.name;
+      } else if (!this.selectedMarketplaceName) {
+        // Fallback to ID if name not available
+        this.selectedMarketplaceName = this.selectedMarketplace;
+      }
+      console.log('Final marketplace name for navigation:', this.selectedMarketplaceName);
+    }
+    
     // For server tab: call local proxy to run fm-manager.jar and return CSV
     if (this.activeTab === 'server') {
       const proxyUrl = 'http://localhost:3000/run-trades';
@@ -206,17 +249,17 @@ export class Analysis implements OnInit {
             const jsonResponse = JSON.parse(response);
             if (jsonResponse.message) {
               // "No trades" response
-              this.router.navigate(['/dashboard'], { state: { message: jsonResponse.message, trades: jsonResponse.trades || [] } });
+              this.router.navigate(['/dashboard'], { state: { message: jsonResponse.message, trades: jsonResponse.trades || [], marketplace: this.selectedMarketplaceName, sessionID: this.selectedSession, marketplaceId: this.selectedMarketplace } });
             } else if (jsonResponse.error) {
               // Error response from proxy (shouldn't reach here normally, but handle it)
               this.analysisError = jsonResponse.error;
             } else {
               // Unexpected JSON, treat as CSV
-              this.router.navigate(['/dashboard'], { state: { csv: response } });
+              this.router.navigate(['/dashboard'], { state: { csv: response, marketplace: this.selectedMarketplaceName, sessionID: this.selectedSession, marketplaceId: this.selectedMarketplace } });
             }
           } catch (parseErr) {
             // Response is CSV text
-            this.router.navigate(['/dashboard'], { state: { csv: response } });
+            this.router.navigate(['/dashboard'], { state: { csv: response, marketplace: this.selectedMarketplaceName, sessionID: this.selectedSession, marketplaceId: this.selectedMarketplace } });
           }
         },
         (err: any) => {
