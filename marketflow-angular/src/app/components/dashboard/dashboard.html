@@ -2,6 +2,42 @@
   <h1>Dashboard</h1>
   <p>Welcome to your Marketflow dashboard. You have successfully logged in.</p>
 
+  <!-- Session Info -->
+  <div *ngIf="marketplace || sessionID" class="session-info">
+    <div *ngIf="marketplace" class="info-item">
+      <strong>Marketplace:</strong> {{ marketplace }}
+    </div>
+    <div *ngIf="sessionID" class="info-item">
+      <strong>Session ID:</strong> {{ sessionID }}
+    </div>
+  </div>
+
+  <!-- Session Selector Dropdown -->
+  <div *ngIf="marketplace && sessionID" class="session-selector">
+    <label class="form-label">Switch to Another Session:</label>
+    <div *ngIf="isLoadingSessions" class="loading-text">
+      Loading sessions...
+    </div>
+    <div *ngIf="sessionsError" class="error-text">
+      {{ sessionsError }}
+    </div>
+    <select
+      class="form-select"
+      [(ngModel)]="selectedSession"
+      (change)="onSessionChange()"
+      [disabled]="isLoadingSessions || sessions.length === 0">
+      <option [value]="sessionID">
+        {{ sessionID }} (current)
+      </option>
+      <option 
+        *ngFor="let s of sessions" 
+        [value]="s.id"
+        [disabled]="s.id === sessionID">
+        {{ s.id }}
+      </option>
+    </select>
+  </div>
+
   <!-- No trades message -->
   <div *ngIf="message" class="no-trades-message">
     <div class="message-icon">ℹ️</div>
@@ -16,24 +52,16 @@
     </pre>
   </div>
 
-  <div *ngIf="csv">
-    <h2>Trades CSV Output</h2>
-    <div *ngIf="csvRows && csvRows.length">
-      <table style="width:100%;border-collapse:collapse;">
-        <thead>
-          <tr>
-            <th *ngFor="let h of csvRows[0]" style="border-bottom:1px solid #ddd;padding:8px;text-align:left">{{ h }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let row of csvRows.slice(1)">
-            <td *ngFor="let cell of row" style="border-bottom:1px solid #f0f0f0;padding:8px">{{ cell }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <div *ngIf="!csvRows || csvRows.length === 0">
-      <pre style="white-space:pre-wrap; background:#f3f3f3;padding:1em;border-radius:8px">{{ csv }}</pre>
+  <!-- Trade Price Chart (Figma-style card) -->
+  <div *ngIf="showChart && chartConfig" class="chart-card">
+    <h2>Trade Price Analysis</h2>
+    <div class="chart-container">
+      <canvas 
+        baseChart
+        [type]="'line'"
+        [data]="chartConfig.data"
+        [options]="chartConfig.options">
+      </canvas>
     </div>
   </div>
 </div>

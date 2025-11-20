@@ -121,7 +121,7 @@
             <option 
               *ngFor="let s of sessions" 
               [value]="s.id">
-              {{ s.name || 'Session ' + s.id }} ({{ s.traders || 0 }} traders)
+              {{ s.name || ('Session ' + s.id) }}
             </option>
           </select>
           
