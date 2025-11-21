@@ -131,6 +131,28 @@ button:focus, .card-button:focus, a:focus {
 	outline: 3px solid rgba(22, 163, 74, 0.2); 
 	outline-offset: 2px; 
 }
+.welcome-message-top {
+	position: fixed;
+	top: 1.5rem;
+	left: 1.5rem;
+	padding: 0.75rem 1.5rem;
+	background: var(--white);
+	border: 1px solid var(--green-200);
+	border-radius: 0.75rem;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	z-index: 1000;
+}
+
+.welcome-text {
+	color: var(--green-700);
+	font-size: 0.95rem;
+	font-weight: 400;
+}
+
+.welcome-text strong {
+	font-weight: 600;
+	color: var(--green-800);
+}
 
 /* Responsive */
 @media (max-width: 640px) {
