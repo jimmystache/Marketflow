@@ -40,7 +40,7 @@ interface TradeData {
   selector: 'app-dashboard',
   standalone: true,
   templateUrl: './dashboard.html',
-  styleUrls: ['./dashboard.css'],
+  styleUrls: ['./dashboard.css', '../analysis/analysis.css'],
   imports: [CommonModule, BaseChartDirective, JsonPipe, FormsModule],
 })
 export class Dashboard {
@@ -70,11 +70,7 @@ export class Dashboard {
     '#6366f1', // indigo-600
   ];
 
-  constructor(
-    private http: HttpClient,
-    private router: Router,
-    private authService: AuthService
-  ) {
+  constructor(private http: HttpClient, private router: Router, private authService: AuthService) {
     // Access navigation state for orders, csv, or message (no trades)
     const nav = window.history.state;
     console.log('Dashboard navigation state:', nav);
@@ -102,8 +98,8 @@ export class Dashboard {
       this.csv = nav.csv;
       try {
         if (this.csv) {
-          const lines = this.csv.split(/\r?\n/).filter(l => l.trim().length > 0);
-          this.csvRows = lines.map(l => l.split(','));
+          const lines = this.csv.split(/\r?\n/).filter((l) => l.trim().length > 0);
+          this.csvRows = lines.map((l) => l.split(','));
         }
       } catch (e) {
         this.csvRows = [];
@@ -127,14 +123,19 @@ export class Dashboard {
     }
   }
 
+  goBack() {
+    this.router.navigate(['/analysis']);
+    
+  }
+
   private buildChart() {
     // Parse CSV data
     const tradeDataMap = new Map<string, TradeData[]>();
     const headerRow = this.csvRows[0];
     // Find column indices
-    const symbolIdx = headerRow.findIndex(h => h.trim() === 'symbol');
-    const priceIdx = headerRow.findIndex(h => h.trim() === 'price');
-    const elapsedSecondsIdx = headerRow.findIndex(h => h.trim() === 'elapsedSeconds');
+    const symbolIdx = headerRow.findIndex((h) => h.trim() === 'symbol');
+    const priceIdx = headerRow.findIndex((h) => h.trim() === 'price');
+    const elapsedSecondsIdx = headerRow.findIndex((h) => h.trim() === 'elapsedSeconds');
     if (symbolIdx === -1 || priceIdx === -1 || elapsedSecondsIdx === -1) return;
     for (let i = 1; i < this.csvRows.length; i++) {
       const row = this.csvRows[i];
@@ -149,23 +150,25 @@ export class Dashboard {
       tradeDataMap.get(symbol)!.push({ symbol, price, elapsedSeconds });
     }
     // Sort each symbol's data by elapsed seconds
-    tradeDataMap.forEach(data => {
+    tradeDataMap.forEach((data) => {
       data.sort((a, b) => a.elapsedSeconds - b.elapsedSeconds);
     });
     // Get unique elapsed seconds for x-axis
     const allElapsedSeconds = new Set<number>();
-    tradeDataMap.forEach(data => {
-      data.forEach(d => allElapsedSeconds.add(d.elapsedSeconds));
+    tradeDataMap.forEach((data) => {
+      data.forEach((d) => allElapsedSeconds.add(d.elapsedSeconds));
     });
     const xAxisLabelValues = Array.from(allElapsedSeconds).sort((a, b) => a - b);
-    const xAxisLabels = xAxisLabelValues.map(s => `${s}s`);
+    const xAxisLabels = xAxisLabelValues.map((s) => `${s}s`);
     // Build datasets for each symbol - align data to x-axis
     const datasets = Array.from(tradeDataMap.entries()).map((entry, idx) => {
       const [symbol, data] = entry;
       const color = this.colorPalette[idx % this.colorPalette.length];
       const priceMap = new Map<number, number>();
-      data.forEach(d => { priceMap.set(d.elapsedSeconds, d.price); });
-      const alignedPrices = xAxisLabelValues.map(elapsed => priceMap.get(elapsed) ?? null);
+      data.forEach((d) => {
+        priceMap.set(d.elapsedSeconds, d.price);
+      });
+      const alignedPrices = xAxisLabelValues.map((elapsed) => priceMap.get(elapsed) ?? null);
       return {
         label: symbol,
         data: alignedPrices,
@@ -259,7 +262,7 @@ export class Dashboard {
     console.log('Fetching sessions from:', url);
     const headers = new HttpHeaders({
       Accept: 'application/json',
-      Authorization: `Bearer ${token}`
+      Authorization: `Bearer ${token}`,
     });
 
     this.http.get<any>(url, { headers }).subscribe(
@@ -268,7 +271,12 @@ export class Dashboard {
         // Handle both array and HAL-wrapped response
         if (Array.isArray(data)) {
           this.sessions = data;
-        } else if (data && typeof data === 'object' && data._embedded && Array.isArray(data._embedded.sessions)) {
+        } else if (
+          data &&
+          typeof data === 'object' &&
+          data._embedded &&
+          Array.isArray(data._embedded.sessions)
+        ) {
           this.sessions = data._embedded.sessions;
         } else {
           this.sessions = [];
@@ -295,7 +303,7 @@ export class Dashboard {
     const url = `${this.apiBaseUrl}/marketplaces/${marketplaceId}?format=application/json`;
     const headers = new HttpHeaders({
       Accept: 'application/json',
-      Authorization: `Bearer ${token}`
+      Authorization: `Bearer ${token}`,
     });
 
     this.http.get<any>(url, { headers }).subscribe(
@@ -316,12 +324,12 @@ export class Dashboard {
   onSessionChange() {
     if (this.selectedSession && this.selectedSession !== this.sessionID) {
       const nav = window.history.state;
-      this.router.navigate(['/dashboard'], { 
-        state: { 
-          ...nav, 
+      this.router.navigate(['/dashboard'], {
+        state: {
+          ...nav,
           sessionID: this.selectedSession,
-          marketplaceId: nav?.marketplaceId
-        } 
+          marketplaceId: nav?.marketplaceId,
+        },
       });
     }
   }
