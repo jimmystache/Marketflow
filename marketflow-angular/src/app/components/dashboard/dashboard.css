@@ -17,3 +17,141 @@
   line-height: 1.5;
 }
 
+/* Session Info Styling */
+.session-info {
+  background: #f0f9ff;
+  border: 1px solid #0284c7;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin: 1.5rem 0;
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.info-item {
+  color: #0c4a6e;
+  font-size: 0.95rem;
+}
+
+.info-item strong {
+  font-weight: 600;
+  color: #0284c7;
+}
+
+/* Session Selector Styling */
+.session-selector {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin: 1.5rem 0;
+}
+
+.form-label {
+  display: block;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.form-select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  font-size: 0.95rem;
+  background-color: white;
+  cursor: pointer;
+  transition: border-color 200ms ease;
+}
+
+.form-select:hover:not(:disabled) {
+  border-color: #0284c7;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
+}
+
+.form-select:disabled {
+  background-color: #f1f5f9;
+  cursor: not-allowed;
+  color: #94a3b8;
+}
+
+.loading-text {
+  color: #64748b;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.error-text {
+  color: #dc2626;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+/* No trades message styling */
+.no-trades-message {
+  background: #e0f2fe;
+  border: 2px solid #0284c7;
+  border-radius: 0.75rem;
+  padding: 2rem;
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+.no-trades-message .message-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.no-trades-message h2 {
+  color: #0c4a6e;
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.no-trades-message p {
+  color: #0c4a6e;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+/* Chart Card Styling */
+.chart-card {
+  background: var(--white);
+  border: 2px solid #e5e7eb;
+  border-radius: 0.875rem;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 300ms ease;
+}
+
+.chart-card:hover {
+  border-color: #bbf7d0;
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+}
+
+.chart-card h2 {
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: #111827;
+  margin-bottom: 1.5rem;
+}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 400px;
+  margin-bottom: 1rem;
+}
+
+.chart-container canvas {
+  max-height: 100%;
+}

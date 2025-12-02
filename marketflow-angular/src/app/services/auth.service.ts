@@ -7,6 +7,7 @@ import { catchError, map } from 'rxjs/operators';
  * Token storage key in localStorage
  */
 const TOKEN_KEY = 'marketflow_session_token';
+const ACCOUNT_KEY = 'marketflow_account_name';
 
 /**
  * Login request interface matching the Ad Hoc Markets API format
@@ -94,9 +95,12 @@ export class AuthService {
 
     return this.http.post<LoginResponse>(this.loginUrl, loginRequest, this.httpOptions).pipe(
       map((response) => {
-        // Store the token from the response
+        // Store the token and account name from the response
         if (response.token) {
           this.setToken(response.token);
+        }
+        if (account) {
+          this.setAccount(account);
         }
         return response;
       }),
@@ -115,11 +119,27 @@ export class AuthService {
   }
 
   /**
+   * Stores the account name in localStorage
+   * @param account The account name to store
+   */
+  private setAccount(account: string): void {
+    localStorage.setItem(ACCOUNT_KEY, account);
+  }
+
+  /**
    * Retrieves the stored authentication token from localStorage
    * @returns The stored token or null if not found
    */
   getToken(): string | null {
     return localStorage.getItem(TOKEN_KEY);
+  }
+
+  /**
+   * Retrieves the stored account name from localStorage
+   * @returns The stored account name or null if not found
+   */
+  getAccount(): string | null {
+    return localStorage.getItem(ACCOUNT_KEY);
   }
 
   /**
@@ -131,10 +151,11 @@ export class AuthService {
   }
 
   /**
-   * Logs out the user by removing the stored token
+   * Logs out the user by removing the stored token and account
    */
   logout(): void {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(ACCOUNT_KEY);
   }
 
   /**

@@ -1,4 +1,9 @@
 <div class="size-full overflow-auto bg-green-50">
+  <!-- Welcome Message - Top Left -->
+  <div *ngIf="authService.isLoggedIn()" class="welcome-message-top">
+    <span class="welcome-text">Welcome, <strong>{{ authService.getAccount() }}</strong></span>
+  </div>
+  
   <div class="min-h-full flex flex-col items-center justify-center p-8">
     <div class="w-full max-w-7xl">
       <!-- Header Section -->

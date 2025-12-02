@@ -45,7 +45,7 @@
         [class.active]="activeTab === 'upload'">
         <div class="space-y-2">
           <label class="form-label">Upload CSV File</label>
-          <div class="upload-area" (click)="triggerFileUpload()">
+          <div class="upload-area" (click)="!isRunningAnalysis && triggerFileUpload()" [class.disabled]="isRunningAnalysis">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="17 8 12 3 7 8"/>
@@ -56,6 +56,7 @@
               type="file"
               accept=".csv"
               (change)="handleFileChoose($event)"
+              [disabled]="isRunningAnalysis"
               style="display: none;"
             />
             <label for="csv-upload" class="upload-label">
@@ -72,17 +73,55 @@
       <div 
         class="tab-content"
         [class.active]="activeTab === 'server'">
+        <!-- overlay spinner while running analysis -->
+        <div class="analysis-overlay" *ngIf="isRunningAnalysis">
+          <div class="spinner"></div>
+          <p class="overlay-text">Running analysis — this may take a few moments...</p>
+        </div>
         <div class="space-y-2">
+          <!-- MARKETPLACE DROPDOWN -->
+          <div class="marketplace-section">
+            <label class="form-label">Select Marketplace</label>
+            <div *ngIf="isLoadingMarketplaces" class="loading-text">
+              Loading marketplaces...
+            </div>
+            <div *ngIf="marketplaceError" class="error-text">
+              {{ marketplaceError }}
+            </div>
+            <select
+              class="form-select"
+              [(ngModel)]="selectedMarketplace"
+              (change)="onMarketplaceChange()"
+              [disabled]="isRunningAnalysis || isLoadingMarketplaces || marketplaces.length === 0">
+              <option value="">-- Choose a marketplace --</option>
+              <option 
+                *ngFor="let m of marketplaces" 
+                [value]="m.id">
+                {{ m.name || 'Marketplace ' + m.id }}
+              </option>
+            </select>
+          </div>
+
+          <!-- SESSION DROPDOWN -->
           <label class="form-label">Select Trading Session</label>
+          <div *ngIf="isLoadingSessions" class="loading-text">
+            Loading sessions...
+          </div>
+          <div *ngIf="sessionsError" class="error-text">
+            {{ sessionsError }}
+          </div>
           <select
             class="form-select"
             [(ngModel)]="selectedSession"
-            (change)="updateSessionDetails()">
-            <option value="">Choose a session to analyze</option>
+            (change)="updateSessionDetails()"
+            [disabled]="isRunningAnalysis || !selectedMarketplace || isLoadingSessions">
+            <option value="">
+              {{ selectedMarketplace ? (isLoadingSessions ? 'Loading sessions...' : 'Choose a session to analyze') : 'Select a marketplace first' }}
+            </option>
             <option 
               *ngFor="let s of sessions" 
               [value]="s.id">
-              {{ s.name }} ({{ s.traders }} traders)
+              {{ s.name || ('Session ' + s.id) }}
             </option>
           </select>
           
@@ -99,12 +138,25 @@
         </div>
       </div>
 
-      <button 
-        class="start-analysis-btn" 
-        (click)="startAnalysis()"
-        [disabled]="(activeTab === 'upload' && !selectedFile) || (activeTab === 'server' && !selectedSession)">
-        Start Analysis
-      </button>
+
+      <div class="button-row">
+        <button 
+          class="start-analysis-btn" 
+          (click)="startAnalysis()"
+          [disabled]="isRunningAnalysis || (activeTab === 'upload' && !selectedFile) || (activeTab === 'server' && (!selectedMarketplace || !selectedSession))">
+          <span *ngIf="!isRunningAnalysis">Start Analysis</span>
+          <span *ngIf="isRunningAnalysis">Running...</span>
+        </button>
+      </div>
+
+      <div *ngIf="analysisError" class="info-notification">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="info-icon">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <span>{{ analysisError }}</span>
+      </div>
     </div>
   </div>
 </div>
