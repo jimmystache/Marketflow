@@ -64,3 +64,6 @@
 2025-11-20T15:39:57.653-07:00  INFO 33552 --- [main] fm.manager.Application                   : Starting Application v0.6.0-SNAPSHOT using Java 24.0.2 with PID 33552 (C:\Users\brain\OneDrive\Desktop\marketflow\tools\fm-proxy\fm-manager.jar started by brain in C:\Users\brain\OneDrive\Desktop\marketflow\tools\fm-proxy)
 2025-11-20T15:39:57.665-07:00  INFO 33552 --- [main] fm.manager.Application                   : No active profile set, falling back to 1 default profile: "default"
 2025-11-20T15:39:59.398-07:00  INFO 33552 --- [main] fm.manager.Application                   : Started Application in 3.149 seconds (process running for 4.056)
+2025-12-04T12:16:13.086-07:00  INFO 20904 --- [main] fm.manager.Application                   : Starting Application v0.6.0-SNAPSHOT using Java 24.0.2 with PID 20904 (C:\Users\brain\OneDrive\Desktop\marketflow\tools\fm-proxy\fm-manager.jar started by brain in C:\Users\brain\OneDrive\Desktop\marketflow\tools\fm-proxy)
+2025-12-04T12:16:13.090-07:00  INFO 20904 --- [main] fm.manager.Application                   : No active profile set, falling back to 1 default profile: "default"
+2025-12-04T12:16:14.678-07:00  INFO 20904 --- [main] fm.manager.Application                   : Started Application in 2.725 seconds (process running for 3.738)
