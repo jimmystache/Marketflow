@@ -132,6 +132,23 @@
               [(ngModel)]="orderPrice">
           </div>
           <div class="input-with-controls">
+            <p>$</p>
+            <input 
+              type="number" 
+              class="number-input" 
+              [(ngModel)]="orderPrice" 
+              [min]="1.00" 
+              [max]="1000">
+            <div class="input-controls">
+              <button class="control-mini" (click)="decrementPrice()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+              </button>
+              <button class="control-mini" (click)="incrementPrice()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+              </button>
+            </div>
+          </div>
+          <!-- <div class="input-with-controls">
             <input 
               type="text" 
               class="number-input price-input" 
@@ -145,7 +162,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
               </button>
             </div>
-          </div>
+          </div> -->
         </div>
 
         <!-- Place Order Button -->
