@@ -607,6 +607,10 @@ export class Trading implements OnInit, OnDestroy {
    * Navigate back
    */
   goBack(): void {
+    if (this.activeTab === 'graph' && this.priceChart) {
+    this.priceChart.destroy();
+    this.priceChart = null;
+    }
     this.router.navigate(['/']);
   }
 
