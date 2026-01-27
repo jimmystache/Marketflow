@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { SupabaseService, DbOrder, DbTrade, DbTrader, DbMarket, DbPosition } from '../../services/supabase.service';
+import { Chart, registerables } from 'chart.js';
+Chart.register(...registerables);
 
 interface OrderBookEntry {
   price: number;
@@ -83,7 +85,10 @@ export class Trading implements OnInit, OnDestroy {
   lastPrice: number | null = null;
 
   // UI state
-  activeTab: 'orderbook' | 'history' | 'myorders' = 'orderbook';
+  activeTab: 'orderbook' | 'history' | 'myorders' | 'graph' = 'orderbook';
+
+  // Chart
+  priceChart: Chart | null = null;
 
   // Username input for login
   usernameInput: string = '';
@@ -195,6 +200,9 @@ export class Trading implements OnInit, OnDestroy {
       this.trades = trades;
       if (trades.length > 0) {
         this.lastPrice = Number(trades[0].price);
+      }
+      if (this.activeTab === 'graph') {
+        this.makePriceChart();
       }
     });
 
@@ -605,8 +613,12 @@ export class Trading implements OnInit, OnDestroy {
   /**
    * Set active tab
    */
-  setActiveTab(tab: 'orderbook' | 'history' | 'myorders'): void {
+  setActiveTab(tab: 'orderbook' | 'history' | 'myorders' | 'graph'): void {
     this.activeTab = tab;
+
+    if (tab === 'graph') {
+      setTimeout(() => this.makePriceChart(), 0);
+    }
   }
 
   /**
@@ -636,5 +648,55 @@ export class Trading implements OnInit, OnDestroy {
   formatTime(timestamp: string): string {
     const date = new Date(timestamp);
     return date.toLocaleTimeString();
+  }
+
+  private makePriceChart(): void {
+    const canvas = document.getElementById('priceChart') as HTMLCanvasElement;
+    if (!canvas) return;
+
+    // Sort trades by time (oldest → newest)
+    const sortedTrades = [...this.trades].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    const labels = sortedTrades.map(t =>
+      new Date(t.created_at).toLocaleTimeString()
+    );
+
+    const prices = sortedTrades.map(t => Number(t.price));
+
+    // Destroy existing chart if it exists
+    if (this.priceChart) {
+      this.priceChart.destroy();
+    }
+
+    this.priceChart = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: this.symbol,
+            data: prices,
+            borderColor: 'red',
+            backgroundColor: 'rgba(37, 99, 235, 0.1)',
+            tension: 0.25,
+            pointRadius: 3
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            title: { display: true, text: 'Time' }
+          },
+          y: {
+            title: { display: true, text: 'Price' }
+          }
+        }
+      }
+    });
   }
 }

@@ -372,7 +372,6 @@
   cursor: pointer;
   transition: all 200ms ease;
   letter-spacing: 0.025em;
-  margin-top: auto;
 }
 
 .place-order-btn.buy {
@@ -1051,6 +1050,12 @@ p {
   cursor: pointer;
   font-size: 0.875rem;
   transition: all 200ms ease;
+}
+
+.graph-container {
+  height: 100%;
+  padding: 1rem;
+  background: var(--green-50);
 }
 
 .logout-btn:hover {

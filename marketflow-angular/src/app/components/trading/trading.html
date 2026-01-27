@@ -190,21 +190,6 @@
               </button>
             </div>
           </div>
-          <!-- <div class="input-with-controls">
-            <input 
-              type="text" 
-              class="number-input price-input" 
-              [value]="formatCurrency(orderPrice)"
-              (input)="orderPrice = +$any($event.target).value.replace('$', '') || 0">
-            <div class="input-controls">
-              <button class="control-mini" (click)="decrementPrice()">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
-              </button>
-              <button class="control-mini" (click)="incrementPrice()">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
-              </button>
-            </div>
-          </div> -->
         </div>
 
         <!-- Place Order Button -->
@@ -249,6 +234,12 @@
           (click)="setActiveTab('myorders')">
           MY ORDERS
           <span *ngIf="getOpenOrdersCount() > 0" class="order-count">{{ getOpenOrdersCount() }}</span>
+        </button>
+        <button 
+          class="tab-btn" 
+          [class.active]="activeTab === 'graph'"
+          (click)="setActiveTab('graph')">
+          GRAPH
         </button>
       </div>
 
@@ -362,6 +353,11 @@
               No orders placed yet
             </div>
           </div>
+        </div>
+      </div>
+      <div class="tab-content" *ngIf="activeTab === 'graph'">
+        <div class="graph-container">
+          <canvas id="priceChart"></canvas>
         </div>
       </div>
     </main>
