@@ -625,6 +625,10 @@ export class Trading implements OnInit, OnDestroy {
 
     // Load orders and trades for this stock
     await this.loadStockData();
+    
+    if (this.activeTab === 'graph') {
+      setTimeout(() => this.makePriceChart(), 0);
+    }
   }
 
   /**
