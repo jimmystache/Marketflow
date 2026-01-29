@@ -22,7 +22,16 @@
       </div>
 
       <!-- Feature Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
+        <!-- Trading Simulator -->
+        <card
+          title="Trading Simulator"
+          description="Practice trading with a simulated market, order book, and real-time bid/ask spreads"
+          icon="trending"
+          buttonLabel="Start Trading"
+          (cardClick)="goTo('trading')"
+        ></card>
+
         <!-- Environment Setup -->
         <card
           title="Environment Setup"

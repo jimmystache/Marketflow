@@ -1,7 +1,8 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router, RouterOutlet } from '@angular/router';
+import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
 import { AuthService } from './services/auth.service';
+import { filter } from 'rxjs/operators';
 
 @Component({
   selector: 'app-root',
@@ -10,10 +11,19 @@ import { AuthService } from './services/auth.service';
   styleUrl: './app.css'
 })
 export class App {
+  showHeader = true;
+
   constructor(
     private router: Router,
     private authService: AuthService
-  ) {}
+  ) {
+    // Hide header on trading page
+    this.router.events.pipe(
+      filter(event => event instanceof NavigationEnd)
+    ).subscribe((event: any) => {
+      this.showHeader = !event.url.includes('/trading');
+    });
+  }
 
   goTo(page: string) {
     this.router.navigate([page]);
