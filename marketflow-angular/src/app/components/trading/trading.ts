@@ -733,6 +733,9 @@ export class Trading implements OnInit, OnDestroy {
     // Load orders and trades for this stock
     await this.loadStockData();
 
+    // Re-bind realtime channels to the newly selected stock.
+    this.subscribeToEnvironmentUpdates();
+
     if (this.activeTab === 'graph') {
       setTimeout(() => this.makePriceChart(), 0);
     }
@@ -1702,5 +1705,49 @@ export class Trading implements OnInit, OnDestroy {
         },
       },
     });
+  }
+
+  shortId(id: string): string {
+    const v = String(id || '');
+    if (!v) return '';
+    if (v.length <= 12) return v;
+    return `${v.slice(0, 6)}…${v.slice(-4)}`;
+  }
+
+  async copyEnvironmentId(): Promise<void> {
+    if (!this.environmentId) return;
+    await this.copyToClipboard(this.environmentId);
+  }
+
+  async copyStockId(): Promise<void> {
+    if (!this.selectedStockId) return;
+    await this.copyToClipboard(this.selectedStockId);
+  }
+
+  private async copyToClipboard(text: string): Promise<void> {
+    const value = String(text || '').trim();
+    if (!value) return;
+
+    try {
+      await navigator.clipboard.writeText(value);
+      return;
+    } catch {
+      // Fall back to legacy copy if Clipboard API is blocked.
+    }
+
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = value;
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    } catch (error) {
+      console.warn('Copy to clipboard failed:', error);
+    }
   }
 }
