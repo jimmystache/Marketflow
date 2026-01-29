@@ -2,12 +2,12 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { 
-  SupabaseService, 
-  DbOrder, 
-  DbTrade, 
-  DbTrader, 
-  DbMarket, 
+import {
+  SupabaseService,
+  DbOrder,
+  DbTrade,
+  DbTrader,
+  DbMarket,
   DbPosition,
   DbTradingEnvironment,
   DbEnvironmentSearchResult,
@@ -17,9 +17,20 @@ import {
   DbEnvironmentOrder,
   DbEnvironmentTrade,
   CreateEnvironmentInput,
-  CreateStockInput
+  CreateStockInput,
 } from '../../services/supabase.service';
 import { Chart, registerables } from 'chart.js';
+import { BaseChartDirective } from 'ng2-charts';
+import {
+  Chart as ChartJS,
+  ChartConfiguration,
+  LineController,
+  LineElement,
+  LinearScale,
+  PointElement,
+  Tooltip,
+  Legend,
+} from 'chart.js';
 Chart.register(...registerables);
 
 interface OrderBookEntry {
@@ -52,19 +63,24 @@ interface StockFormInput {
 }
 
 // UI View state
-type ViewState = 'login' | 'environment-select' | 'create-environment' | 'join-environment' | 'trading';
+type ViewState =
+  | 'login'
+  | 'environment-select'
+  | 'create-environment'
+  | 'join-environment'
+  | 'trading';
 
 @Component({
   selector: 'app-trading',
   standalone: true,
   imports: [CommonModule, FormsModule, BaseChartDirective],
   templateUrl: './trading.html',
-  styleUrls: ['./trading.css']
+  styleUrls: ['./trading.css'],
 })
 export class Trading implements OnInit, OnDestroy {
   // View state
   currentView: ViewState = 'login';
-  
+
   // Connection state
   isConnected: boolean = false;
   isLoading: boolean = true;
@@ -78,43 +94,43 @@ export class Trading implements OnInit, OnDestroy {
   isPaused: boolean = false;
 
   // ==================== ENVIRONMENT STATE ====================
-  
+
   // Current environment
   currentEnvironment: DbTradingEnvironment | null = null;
   environmentId: string = '';
-  
+
   // Environment stocks
   environmentStocks: DbEnvironmentStock[] = [];
   selectedStock: DbEnvironmentStock | null = null;
   selectedStockId: string = '';
-  
+
   // Participant state
   participant: DbEnvironmentParticipant | null = null;
   participantId: string = '';
   isAdmin: boolean = false;
-  
+
   // Positions in current environment
   environmentPositions: DbEnvironmentPosition[] = [];
-  
+
   // Environment orders and trades
   environmentOrders: DbEnvironmentOrder[] = [];
   environmentTrades: DbEnvironmentTrade[] = [];
   myEnvironmentOrders: DbEnvironmentOrder[] = [];
-  
+
   // Environment lists for selection
   publicEnvironments: DbTradingEnvironment[] = [];
   myEnvironments: DbTradingEnvironment[] = [];
-  
+
   // Join environment form
   joinEnvironmentId: string = '';
   joinPassword: string = '';
   selectedEnvironmentToJoin: DbEnvironmentSearchResult | null = null;
-  
+
   // Environment search
   environmentSearchTerm: string = '';
   searchResults: DbEnvironmentSearchResult[] = [];
   isSearching: boolean = false;
-  
+
   // Create environment form
   newEnvironment: CreateEnvironmentInput = {
     name: '',
@@ -125,20 +141,22 @@ export class Trading implements OnInit, OnDestroy {
     starting_shares: 100,
     min_price_change: 0.01,
     allow_shorting: false,
-    max_short_units: 0
+    max_short_units: 0,
   };
-  
+
   // Stock creation form
-  newStocks: StockFormInput[] = [{
-    symbol: '',
-    name: '',
-    description: '',
-    startingPrice: 100,
-    minPriceChange: 0.01,
-    allowShorting: null,
-    maxShortUnits: null
-  }];
-  
+  newStocks: StockFormInput[] = [
+    {
+      symbol: '',
+      name: '',
+      description: '',
+      startingPrice: 100,
+      minPriceChange: 0.01,
+      allowShorting: null,
+      maxShortUnits: null,
+    },
+  ];
+
   // Import settings
   importFromEnvironmentId: string = '';
   availableImportEnvironments: DbTradingEnvironment[] = [];
@@ -147,9 +165,9 @@ export class Trading implements OnInit, OnDestroy {
   traderId: string = '';
   traderUsername: string = '';
   trader: DbTrader | null = null;
-  cash: number = 10000.00;
-  settledCash: number = 10000.00;
-  availableCash: number = 10000.00;
+  cash: number = 10000.0;
+  settledCash: number = 10000.0;
+  availableCash: number = 10000.0;
 
   // Position (for current selected stock)
   position: DbPosition | null = null;
@@ -183,9 +201,9 @@ export class Trading implements OnInit, OnDestroy {
         backgroundColor: 'rgba(22,163,74,0.15)',
         pointRadius: 0,
         borderWidth: 2,
-        tension: 0.25
-      }
-    ]
+        tension: 0.25,
+      },
+    ],
   };
 
   priceChartOptions: ChartConfiguration<'line'>['options'] = {
@@ -206,9 +224,9 @@ export class Trading implements OnInit, OnDestroy {
             if (!Number.isFinite(idx)) return 'Trade';
             if (Number.isFinite(ts)) return `Trade #${idx + 1} • ${new Date(ts).toLocaleString()}`;
             return `Trade #${idx + 1}`;
-          }
-        }
-      }
+          },
+        },
+      },
     },
     scales: {
       x: {
@@ -225,13 +243,13 @@ export class Trading implements OnInit, OnDestroy {
             const n = typeof value === 'string' ? Number(value) : (value as number);
             if (!Number.isFinite(n)) return '';
             return `#${Math.round(n) + 1}`;
-          }
-        }
+          },
+        },
       },
       y: {
-        ticks: { maxTicksLimit: 6 }
-      }
-    }
+        ticks: { maxTicksLimit: 6 },
+      },
+    },
   };
 
   private tradePointTimes: number[] = [];
@@ -260,7 +278,7 @@ export class Trading implements OnInit, OnDestroy {
 
   constructor(
     private router: Router,
-    private supabaseService: SupabaseService
+    private supabaseService: SupabaseService,
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -305,12 +323,11 @@ export class Trading implements OnInit, OnDestroy {
 
       // Load environments
       await this.loadEnvironments();
-      
+
       // Move to environment selection
       this.currentView = 'environment-select';
       this.isLoading = false;
       this.isLoggingIn = false;
-
     } catch (error: any) {
       console.error('Login error:', error);
       this.connectionError = error.message || 'Failed to connect to trading server';
@@ -346,7 +363,7 @@ export class Trading implements OnInit, OnDestroy {
     this.joinPassword = '';
     this.joinEnvironmentId = '';
     this.connectionError = null;
-    
+
     if (env) {
       this.selectedEnvironmentToJoin = env;
       this.joinEnvironmentId = env.id;
@@ -366,7 +383,9 @@ export class Trading implements OnInit, OnDestroy {
 
     this.isSearching = true;
     try {
-      this.searchResults = await this.supabaseService.searchEnvironments(this.environmentSearchTerm);
+      this.searchResults = await this.supabaseService.searchEnvironments(
+        this.environmentSearchTerm,
+      );
     } catch (error) {
       console.error('Error searching environments:', error);
       this.searchResults = [];
@@ -385,7 +404,7 @@ export class Trading implements OnInit, OnDestroy {
 
     this.isSearching = true;
     this.connectionError = null;
-    
+
     try {
       const env = await this.supabaseService.getEnvironmentByIdPublic(this.joinEnvironmentId);
       if (env) {
@@ -399,7 +418,7 @@ export class Trading implements OnInit, OnDestroy {
       this.connectionError = 'Failed to find environment';
       this.selectedEnvironmentToJoin = null;
     }
-    
+
     this.isSearching = false;
   }
 
@@ -437,17 +456,19 @@ export class Trading implements OnInit, OnDestroy {
       starting_shares: 100,
       min_price_change: 0.01,
       allow_shorting: false,
-      max_short_units: 0
+      max_short_units: 0,
     };
-    this.newStocks = [{
-      symbol: '',
-      name: '',
-      description: '',
-      startingPrice: 100,
-      minPriceChange: 0.01,
-      allowShorting: null,
-      maxShortUnits: null
-    }];
+    this.newStocks = [
+      {
+        symbol: '',
+        name: '',
+        description: '',
+        startingPrice: 100,
+        minPriceChange: 0.01,
+        allowShorting: null,
+        maxShortUnits: null,
+      },
+    ];
     this.importFromEnvironmentId = '';
   }
 
@@ -462,7 +483,7 @@ export class Trading implements OnInit, OnDestroy {
       startingPrice: 100,
       minPriceChange: this.newEnvironment.min_price_change,
       allowShorting: null,
-      maxShortUnits: null
+      maxShortUnits: null,
     });
   }
 
@@ -492,14 +513,14 @@ export class Trading implements OnInit, OnDestroy {
       // Import stocks
       const stocks = await this.supabaseService.getEnvironmentStocks(env.id);
       if (stocks.length > 0) {
-        this.newStocks = stocks.map(s => ({
+        this.newStocks = stocks.map((s) => ({
           symbol: s.symbol,
           name: s.name || '',
           description: s.description || '',
           startingPrice: Number(s.starting_price),
           minPriceChange: Number(s.min_price_change),
           allowShorting: s.allow_shorting,
-          maxShortUnits: s.max_short_units
+          maxShortUnits: s.max_short_units,
         }));
       }
     }
@@ -527,7 +548,7 @@ export class Trading implements OnInit, OnDestroy {
     }
 
     // Validate stocks
-    const validStocks = this.newStocks.filter(s => s.symbol.trim());
+    const validStocks = this.newStocks.filter((s) => s.symbol.trim());
     if (validStocks.length === 0) {
       this.connectionError = 'Please add at least one stock';
       return;
@@ -537,26 +558,26 @@ export class Trading implements OnInit, OnDestroy {
     this.connectionError = null;
 
     try {
-      const stocks: CreateStockInput[] = validStocks.map(s => ({
+      const stocks: CreateStockInput[] = validStocks.map((s) => ({
         symbol: s.symbol.trim().toUpperCase(),
         name: s.name.trim() || s.symbol.trim().toUpperCase(),
         description: s.description.trim() || undefined,
         starting_price: s.startingPrice,
         min_price_change: s.minPriceChange,
         allow_shorting: s.allowShorting ?? undefined,
-        max_short_units: s.maxShortUnits ?? undefined
+        max_short_units: s.maxShortUnits ?? undefined,
       }));
 
       console.log('Creating environment:', {
         name: this.newEnvironment.name,
         is_private: this.newEnvironment.is_private,
-        has_password: !!this.newEnvironment.password
+        has_password: !!this.newEnvironment.password,
       });
 
       const env = await this.supabaseService.createEnvironment(
         this.traderId,
         this.newEnvironment,
-        stocks
+        stocks,
       );
 
       if (!env) {
@@ -567,7 +588,6 @@ export class Trading implements OnInit, OnDestroy {
 
       // Join the created environment (creator auto-joins as admin)
       await this.joinEnvironmentById(env.id);
-
     } catch (error: any) {
       console.error('Error creating environment:', error);
       this.connectionError = error.message || 'Failed to create environment';
@@ -588,7 +608,7 @@ export class Trading implements OnInit, OnDestroy {
         environmentId,
         this.traderId,
         false,
-        password
+        password,
       );
 
       this.participantId = this.participant.id;
@@ -617,10 +637,9 @@ export class Trading implements OnInit, OnDestroy {
       this.isConnected = true;
       this.currentView = 'trading';
       this.isLoading = false;
-
     } catch (error: any) {
       console.error('Error joining environment:', error);
-      
+
       // Handle specific error codes
       if (error.message === 'PASSWORD_REQUIRED') {
         this.connectionError = 'Password is required for this private environment';
@@ -629,7 +648,7 @@ export class Trading implements OnInit, OnDestroy {
       } else {
         this.connectionError = error.message || 'Failed to join environment';
       }
-      
+
       this.isLoading = false;
     }
   }
@@ -645,7 +664,7 @@ export class Trading implements OnInit, OnDestroy {
 
     await this.joinEnvironmentById(
       this.selectedEnvironmentToJoin.id,
-      this.selectedEnvironmentToJoin.is_private ? this.joinPassword : undefined
+      this.selectedEnvironmentToJoin.is_private ? this.joinPassword : undefined,
     );
   }
 
@@ -657,14 +676,16 @@ export class Trading implements OnInit, OnDestroy {
 
     // Load stocks
     this.environmentStocks = await this.supabaseService.getEnvironmentStocks(this.environmentId);
-    
+
     // Select first stock by default
     if (this.environmentStocks.length > 0 && !this.selectedStock) {
       await this.selectStock(this.environmentStocks[0]);
     }
 
     // Load positions
-    this.environmentPositions = await this.supabaseService.getParticipantPositions(this.participantId);
+    this.environmentPositions = await this.supabaseService.getParticipantPositions(
+      this.participantId,
+    );
 
     // Load cash from participant
     if (this.participant) {
@@ -699,16 +720,25 @@ export class Trading implements OnInit, OnDestroy {
     if (!this.environmentId || !this.selectedStockId) return;
 
     // Load orders
-    const orders = await this.supabaseService.getEnvironmentOpenOrders(this.environmentId, this.selectedStockId);
+    const orders = await this.supabaseService.getEnvironmentOpenOrders(
+      this.environmentId,
+      this.selectedStockId,
+    );
     this.environmentOrders = orders;
     this.updateEnvironmentOrderBook();
 
     // Load my orders
-    this.myEnvironmentOrders = await this.supabaseService.getParticipantOrders(this.participantId, this.selectedStockId);
+    this.myEnvironmentOrders = await this.supabaseService.getParticipantOrders(
+      this.participantId,
+      this.selectedStockId,
+    );
     this.updateMyOrdersFromEnvironment();
 
     // Load trades
-    this.environmentTrades = await this.supabaseService.getEnvironmentTrades(this.environmentId, this.selectedStockId);
+    this.environmentTrades = await this.supabaseService.getEnvironmentTrades(
+      this.environmentId,
+      this.selectedStockId,
+    );
     this.updateTradesFromEnvironment();
   }
 
@@ -722,7 +752,7 @@ export class Trading implements OnInit, OnDestroy {
       return;
     }
 
-    const pos = this.environmentPositions.find(p => p.stock_id === this.selectedStockId);
+    const pos = this.environmentPositions.find((p) => p.stock_id === this.selectedStockId);
     if (pos) {
       this.positionUnits = pos.units;
       this.positionAvgPrice = Number(pos.avg_price);
@@ -747,20 +777,28 @@ export class Trading implements OnInit, OnDestroy {
     });
 
     // Subscribe to orders
-    this.supabaseService.subscribeToEnvironmentOrders(this.environmentId, this.selectedStockId, (orders) => {
-      this.environmentOrders = orders;
-      this.updateEnvironmentOrderBook();
-      this.loadMyOrders();
-    });
+    this.supabaseService.subscribeToEnvironmentOrders(
+      this.environmentId,
+      this.selectedStockId,
+      (orders) => {
+        this.environmentOrders = orders;
+        this.updateEnvironmentOrderBook();
+        this.loadMyOrders();
+      },
+    );
 
     // Subscribe to trades
-    this.supabaseService.subscribeToEnvironmentTrades(this.environmentId, this.selectedStockId, (trades) => {
-      this.environmentTrades = trades;
-      this.updateTradesFromEnvironment();
-      if (this.activeTab === 'graph') {
-        this.makePriceChart();
-      }
-    });
+    this.supabaseService.subscribeToEnvironmentTrades(
+      this.environmentId,
+      this.selectedStockId,
+      (trades) => {
+        this.environmentTrades = trades;
+        this.updateTradesFromEnvironment();
+        if (this.activeTab === 'graph') {
+          this.makePriceChart();
+        }
+      },
+    );
   }
 
   /**
@@ -768,7 +806,10 @@ export class Trading implements OnInit, OnDestroy {
    */
   async loadMyOrders(): Promise<void> {
     if (!this.participantId || !this.selectedStockId) return;
-    this.myEnvironmentOrders = await this.supabaseService.getParticipantOrders(this.participantId, this.selectedStockId);
+    this.myEnvironmentOrders = await this.supabaseService.getParticipantOrders(
+      this.participantId,
+      this.selectedStockId,
+    );
     this.updateMyOrdersFromEnvironment();
   }
 
@@ -779,8 +820,8 @@ export class Trading implements OnInit, OnDestroy {
     // Aggregate bids
     const bidMap = new Map<number, { units: number; isMine: boolean; count: number }>();
     this.environmentOrders
-      .filter(o => o.type === 'buy' && (o.status === 'open' || o.status === 'partial'))
-      .forEach(o => {
+      .filter((o) => o.type === 'buy' && (o.status === 'open' || o.status === 'partial'))
+      .forEach((o) => {
         const remaining = o.units - o.filled_units;
         if (remaining > 0) {
           const price = Number(o.price);
@@ -797,15 +838,15 @@ export class Trading implements OnInit, OnDestroy {
         price,
         units: data.units,
         isMine: data.isMine,
-        orderCount: data.count
+        orderCount: data.count,
       }))
       .sort((a, b) => b.price - a.price);
 
     // Aggregate asks
     const askMap = new Map<number, { units: number; isMine: boolean; count: number }>();
     this.environmentOrders
-      .filter(o => o.type === 'sell' && (o.status === 'open' || o.status === 'partial'))
-      .forEach(o => {
+      .filter((o) => o.type === 'sell' && (o.status === 'open' || o.status === 'partial'))
+      .forEach((o) => {
         const remaining = o.units - o.filled_units;
         if (remaining > 0) {
           const price = Number(o.price);
@@ -822,7 +863,7 @@ export class Trading implements OnInit, OnDestroy {
         price,
         units: data.units,
         isMine: data.isMine,
-        orderCount: data.count
+        orderCount: data.count,
       }))
       .sort((a, b) => a.price - b.price);
 
@@ -841,7 +882,7 @@ export class Trading implements OnInit, OnDestroy {
    * Update my orders from environment orders
    */
   updateMyOrdersFromEnvironment(): void {
-    this.myOrders = this.myEnvironmentOrders.map(o => ({
+    this.myOrders = this.myEnvironmentOrders.map((o) => ({
       id: o.id,
       type: o.type,
       price: Number(o.price),
@@ -849,7 +890,7 @@ export class Trading implements OnInit, OnDestroy {
       filled_units: o.filled_units,
       status: o.status,
       created_at: o.created_at,
-      trader_id: o.participant_id
+      trader_id: o.participant_id,
     }));
   }
 
@@ -857,7 +898,7 @@ export class Trading implements OnInit, OnDestroy {
    * Update trades from environment trades
    */
   updateTradesFromEnvironment(): void {
-    this.trades = this.environmentTrades.map(t => ({
+    this.trades = this.environmentTrades.map((t) => ({
       id: t.id,
       market_id: t.market_id,
       buy_order_id: t.buy_order_id,
@@ -866,7 +907,7 @@ export class Trading implements OnInit, OnDestroy {
       seller_id: t.seller_participant_id,
       price: t.price,
       units: t.units,
-      created_at: t.created_at
+      created_at: t.created_at,
     }));
 
     if (this.trades.length > 0) {
@@ -886,7 +927,7 @@ export class Trading implements OnInit, OnDestroy {
     const success = await this.supabaseService.toggleEnvironmentPause(
       this.environmentId,
       newPauseState,
-      reason
+      reason,
     );
 
     if (success) {
@@ -977,7 +1018,7 @@ export class Trading implements OnInit, OnDestroy {
     }
 
     const sorted = [...this.trades].sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     );
 
     const maxPoints = 400;
@@ -1001,9 +1042,9 @@ export class Trading implements OnInit, OnDestroy {
       datasets: [
         {
           ...(this.priceChartData.datasets[0] as any),
-          data: points
-        }
-      ]
+          data: points,
+        },
+      ],
     };
   }
 
@@ -1043,14 +1084,14 @@ export class Trading implements OnInit, OnDestroy {
    * Increment price
    */
   incrementPrice(): void {
-    this.orderPrice = Math.min(this.maxPrice, +(this.orderPrice + 0.50).toFixed(2));
+    this.orderPrice = Math.min(this.maxPrice, +(this.orderPrice + 0.5).toFixed(2));
   }
 
   /**
    * Decrement price
    */
   decrementPrice(): void {
-    this.orderPrice = Math.max(0, +(this.orderPrice - 0.50).toFixed(2));
+    this.orderPrice = Math.max(0, +(this.orderPrice - 0.5).toFixed(2));
   }
 
   /**
@@ -1081,24 +1122,26 @@ export class Trading implements OnInit, OnDestroy {
     } else {
       // For sell orders, check if we have enough units
       const openSellUnits = this.myOrders
-        .filter(o => o.type === 'sell' && (o.status === 'open' || o.status === 'partial'))
+        .filter((o) => o.type === 'sell' && (o.status === 'open' || o.status === 'partial'))
         .reduce((sum, o) => sum + (o.units - o.filled_units), 0);
 
       const availableToSell = this.positionUnits - openSellUnits;
-      
+
       // Check shorting rules
       if (this.orderUnits > availableToSell) {
         const shortAmount = this.orderUnits - availableToSell;
-        
+
         // Check if shorting is allowed
-        const stockAllowsShorting = this.selectedStock?.allow_shorting ?? this.currentEnvironment?.allow_shorting;
+        const stockAllowsShorting =
+          this.selectedStock?.allow_shorting ?? this.currentEnvironment?.allow_shorting;
         if (!stockAllowsShorting) {
           alert('Insufficient units to sell. Shorting is not allowed in this environment.');
           return;
         }
-        
+
         // Check max short limit
-        const maxShort = this.selectedStock?.max_short_units ?? this.currentEnvironment?.max_short_units ?? 0;
+        const maxShort =
+          this.selectedStock?.max_short_units ?? this.currentEnvironment?.max_short_units ?? 0;
         const currentShort = Math.abs(Math.min(0, availableToSell));
         if (currentShort + shortAmount > maxShort) {
           alert(`Cannot short more than ${maxShort} units. Current short: ${currentShort}`);
@@ -1119,7 +1162,7 @@ export class Trading implements OnInit, OnDestroy {
         price: this.orderPrice,
         units: this.orderUnits,
         filled_units: 0,
-        status: 'open'
+        status: 'open',
       });
 
       if (!newOrder) {
@@ -1134,7 +1177,7 @@ export class Trading implements OnInit, OnDestroy {
           this.participantId,
           this.cash,
           this.settledCash,
-          this.availableCash
+          this.availableCash,
         );
       }
 
@@ -1144,7 +1187,6 @@ export class Trading implements OnInit, OnDestroy {
       // Reset form
       this.orderUnits = 1;
       this.orderPrice = 0;
-
     } catch (error: any) {
       console.error('Error placing order:', error);
       alert('Failed to place order: ' + error.message);
@@ -1158,19 +1200,27 @@ export class Trading implements OnInit, OnDestroy {
    */
   private async matchEnvironmentOrder(incomingOrder: DbEnvironmentOrder): Promise<void> {
     // Reload orders to get the latest state
-    const openOrders = await this.supabaseService.getEnvironmentOpenOrders(this.environmentId, this.selectedStockId);
+    const openOrders = await this.supabaseService.getEnvironmentOpenOrders(
+      this.environmentId,
+      this.selectedStockId,
+    );
 
     if (incomingOrder.type === 'buy') {
       // Match with sell orders at or below the buy price
       const matchingAsks = openOrders
-        .filter(o => 
-          o.type === 'sell' && 
-          (o.status === 'open' || o.status === 'partial') && 
-          Number(o.price) <= Number(incomingOrder.price) && 
-          o.participant_id !== incomingOrder.participant_id &&
-          o.id !== incomingOrder.id
+        .filter(
+          (o) =>
+            o.type === 'sell' &&
+            (o.status === 'open' || o.status === 'partial') &&
+            Number(o.price) <= Number(incomingOrder.price) &&
+            o.participant_id !== incomingOrder.participant_id &&
+            o.id !== incomingOrder.id,
         )
-        .sort((a, b) => Number(a.price) - Number(b.price) || new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        .sort(
+          (a, b) =>
+            Number(a.price) - Number(b.price) ||
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        );
 
       for (const ask of matchingAsks) {
         const incomingRemaining = incomingOrder.units - incomingOrder.filled_units;
@@ -1180,14 +1230,19 @@ export class Trading implements OnInit, OnDestroy {
     } else {
       // Match with buy orders at or above the sell price
       const matchingBids = openOrders
-        .filter(o => 
-          o.type === 'buy' && 
-          (o.status === 'open' || o.status === 'partial') && 
-          Number(o.price) >= Number(incomingOrder.price) && 
-          o.participant_id !== incomingOrder.participant_id &&
-          o.id !== incomingOrder.id
+        .filter(
+          (o) =>
+            o.type === 'buy' &&
+            (o.status === 'open' || o.status === 'partial') &&
+            Number(o.price) >= Number(incomingOrder.price) &&
+            o.participant_id !== incomingOrder.participant_id &&
+            o.id !== incomingOrder.id,
         )
-        .sort((a, b) => Number(b.price) - Number(a.price) || new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        .sort(
+          (a, b) =>
+            Number(b.price) - Number(a.price) ||
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        );
 
       for (const bid of matchingBids) {
         const incomingRemaining = incomingOrder.units - incomingOrder.filled_units;
@@ -1200,7 +1255,10 @@ export class Trading implements OnInit, OnDestroy {
   /**
    * Execute a trade between a buy and sell order (environment-based)
    */
-  private async executeEnvironmentTrade(buyOrder: DbEnvironmentOrder, sellOrder: DbEnvironmentOrder): Promise<void> {
+  private async executeEnvironmentTrade(
+    buyOrder: DbEnvironmentOrder,
+    sellOrder: DbEnvironmentOrder,
+  ): Promise<void> {
     const buyRemaining = buyOrder.units - buyOrder.filled_units;
     const sellRemaining = sellOrder.units - sellOrder.filled_units;
     const tradeUnits = Math.min(buyRemaining, sellRemaining);
@@ -1217,7 +1275,7 @@ export class Trading implements OnInit, OnDestroy {
       buyer_participant_id: buyOrder.participant_id,
       seller_participant_id: sellOrder.participant_id,
       price: tradePrice,
-      units: tradeUnits
+      units: tradeUnits,
     });
 
     // Update buy order
@@ -1225,7 +1283,7 @@ export class Trading implements OnInit, OnDestroy {
     const buyStatus = newBuyFilled >= buyOrder.units ? 'filled' : 'partial';
     await this.supabaseService.updateEnvironmentOrder(buyOrder.id, {
       filled_units: newBuyFilled,
-      status: buyStatus
+      status: buyStatus,
     });
     buyOrder.filled_units = newBuyFilled;
     buyOrder.status = buyStatus;
@@ -1235,7 +1293,7 @@ export class Trading implements OnInit, OnDestroy {
     const sellStatus = newSellFilled >= sellOrder.units ? 'filled' : 'partial';
     await this.supabaseService.updateEnvironmentOrder(sellOrder.id, {
       filled_units: newSellFilled,
-      status: sellStatus
+      status: sellStatus,
     });
     sellOrder.filled_units = newSellFilled;
     sellOrder.status = sellStatus;
@@ -1244,20 +1302,20 @@ export class Trading implements OnInit, OnDestroy {
     if (buyOrder.participant_id === this.participantId) {
       const cost = tradePrice * tradeUnits;
       this.settledCash -= cost;
-      
+
       // Update position
       const prevUnits = this.positionUnits;
       this.positionUnits += tradeUnits;
       if (this.positionUnits > 0) {
-        this.positionAvgPrice = ((this.positionAvgPrice * prevUnits) + cost) / this.positionUnits;
+        this.positionAvgPrice = (this.positionAvgPrice * prevUnits + cost) / this.positionUnits;
       }
-      
+
       // Refund excess reserved cash
       const priceDifference = (Number(buyOrder.price) - tradePrice) * tradeUnits;
       if (buyStatus === 'filled') {
         this.availableCash += priceDifference;
       }
-      
+
       await this.updateParticipantAndPosition();
     }
 
@@ -1266,7 +1324,7 @@ export class Trading implements OnInit, OnDestroy {
       this.settledCash += revenue;
       this.availableCash += revenue;
       this.positionUnits -= tradeUnits;
-      
+
       await this.updateParticipantAndPosition();
     }
 
@@ -1281,16 +1339,16 @@ export class Trading implements OnInit, OnDestroy {
       this.participantId,
       this.cash,
       this.settledCash,
-      this.availableCash
+      this.availableCash,
     );
 
     // Find and update the position for current stock
-    const pos = this.environmentPositions.find(p => p.stock_id === this.selectedStockId);
+    const pos = this.environmentPositions.find((p) => p.stock_id === this.selectedStockId);
     if (pos) {
       await this.supabaseService.updateEnvironmentPosition(
         pos.id,
         this.positionUnits,
-        this.positionAvgPrice
+        this.positionAvgPrice,
       );
     }
   }
@@ -1318,7 +1376,7 @@ export class Trading implements OnInit, OnDestroy {
           this.participantId,
           this.cash,
           this.settledCash,
-          this.availableCash
+          this.availableCash,
         );
       }
     } catch (error) {
@@ -1336,7 +1394,7 @@ export class Trading implements OnInit, OnDestroy {
     if (this.isResettingOrderBook) return;
 
     const ok = confirm(
-      'Reset order book? This cancels ALL open orders (buys + sells) for everyone in this market.'
+      'Reset order book? This cancels ALL open orders (buys + sells) for everyone in this market.',
     );
     if (!ok) return;
 
@@ -1348,7 +1406,7 @@ export class Trading implements OnInit, OnDestroy {
             o.market_id === this.marketId &&
             o.trader_id === this.traderId &&
             o.type === 'buy' &&
-            (o.status === 'open' || o.status === 'partial')
+            (o.status === 'open' || o.status === 'partial'),
         )
         .reduce((sum, o) => sum + Number(o.price) * Math.max(0, o.units - o.filled_units), 0);
 
@@ -1372,7 +1430,7 @@ export class Trading implements OnInit, OnDestroy {
           this.traderId,
           this.cash,
           this.settledCash,
-          this.availableCash
+          this.availableCash,
         );
       }
 
@@ -1420,7 +1478,7 @@ export class Trading implements OnInit, OnDestroy {
    */
   selectPrevStock(): void {
     if (this.environmentStocks.length <= 1) return;
-    const currentIndex = this.environmentStocks.findIndex(s => s.id === this.selectedStockId);
+    const currentIndex = this.environmentStocks.findIndex((s) => s.id === this.selectedStockId);
     const prevIndex = currentIndex > 0 ? currentIndex - 1 : this.environmentStocks.length - 1;
     this.selectStock(this.environmentStocks[prevIndex]);
   }
@@ -1430,7 +1488,7 @@ export class Trading implements OnInit, OnDestroy {
    */
   selectNextStock(): void {
     if (this.environmentStocks.length <= 1) return;
-    const currentIndex = this.environmentStocks.findIndex(s => s.id === this.selectedStockId);
+    const currentIndex = this.environmentStocks.findIndex((s) => s.id === this.selectedStockId);
     const nextIndex = currentIndex < this.environmentStocks.length - 1 ? currentIndex + 1 : 0;
     this.selectStock(this.environmentStocks[nextIndex]);
   }
@@ -1439,7 +1497,7 @@ export class Trading implements OnInit, OnDestroy {
    * Handle stock selection change from dropdown
    */
   onStockSelectChange(): void {
-    const stock = this.environmentStocks.find(s => s.id === this.selectedStockId);
+    const stock = this.environmentStocks.find((s) => s.id === this.selectedStockId);
     if (stock) {
       this.selectStock(stock);
     }
@@ -1450,8 +1508,8 @@ export class Trading implements OnInit, OnDestroy {
    */
   goBack(): void {
     if (this.activeTab === 'graph' && this.priceChart) {
-    this.priceChart.destroy();
-    this.priceChart = null;
+      this.priceChart.destroy();
+      this.priceChart = null;
     }
     this.router.navigate(['/']);
   }
@@ -1478,7 +1536,7 @@ export class Trading implements OnInit, OnDestroy {
    * Get open orders count
    */
   getOpenOrdersCount(): number {
-    return this.myOrders.filter(o => o.status === 'open' || o.status === 'partial').length;
+    return this.myOrders.filter((o) => o.status === 'open' || o.status === 'partial').length;
   }
 
   /**
@@ -1502,14 +1560,12 @@ export class Trading implements OnInit, OnDestroy {
 
     // Sort trades by time (oldest → newest)
     const sortedTrades = [...this.trades].sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     );
 
-    const labels = sortedTrades.map(t =>
-      new Date(t.created_at).toLocaleTimeString()
-    );
+    const labels = sortedTrades.map((t) => new Date(t.created_at).toLocaleTimeString());
 
-    const prices = sortedTrades.map(t => Number(t.price));
+    const prices = sortedTrades.map((t) => Number(t.price));
 
     // Destroy existing chart if it exists
     if (this.priceChart) {
@@ -1527,22 +1583,22 @@ export class Trading implements OnInit, OnDestroy {
             borderColor: 'red',
             backgroundColor: 'rgba(37, 99, 235, 0.1)',
             tension: 0.25,
-            pointRadius: 3
-          }
-        ]
+            pointRadius: 3,
+          },
+        ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
           x: {
-            title: { display: true, text: 'Time' }
+            title: { display: true, text: 'Time' },
           },
           y: {
-            title: { display: true, text: 'Price' }
-          }
-        }
-      }
+            title: { display: true, text: 'Price' },
+          },
+        },
+      },
     });
   }
 }
