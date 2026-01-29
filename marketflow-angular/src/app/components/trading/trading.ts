@@ -188,6 +188,24 @@ export class Trading implements OnInit, OnDestroy {
 
   // Chart
   priceChart: Chart | null = null;
+  
+  // Chart time range filter
+  chartTimeRange: string = 'all';
+  chartTimeRangeOptions = [
+    { value: 'all', label: 'All Time' },
+    { value: '5m', label: 'Last 5 Minutes' },
+    { value: '15m', label: 'Last 15 Minutes' },
+    { value: '30m', label: 'Last 30 Minutes' },
+    { value: '1h', label: 'Last 1 Hour' },
+    { value: '4h', label: 'Last 4 Hours' },
+    { value: '1d', label: 'Last 24 Hours' },
+    { value: 'custom', label: 'Custom Range' }
+  ];
+  
+  // Custom date range
+  customStartDate: string = '';
+  customEndDate: string = '';
+  showCustomDatePicker: boolean = false;
 
   // Username input for login
   usernameInput: string = '';
@@ -625,7 +643,7 @@ export class Trading implements OnInit, OnDestroy {
 
     // Load orders and trades for this stock
     await this.loadStockData();
-    
+
     if (this.activeTab === 'graph') {
       setTimeout(() => this.makePriceChart(), 0);
     }
@@ -1307,18 +1325,90 @@ export class Trading implements OnInit, OnDestroy {
     return date.toLocaleTimeString();
   }
 
+  /**
+   * Handle time range change
+   */
+  onTimeRangeChange(): void {
+    this.showCustomDatePicker = this.chartTimeRange === 'custom';
+    if (this.chartTimeRange !== 'custom') {
+      this.makePriceChart();
+    }
+  }
+
+  /**
+   * Apply custom date range
+   */
+  applyCustomDateRange(): void {
+    if (this.customStartDate && this.customEndDate) {
+      this.makePriceChart();
+    }
+  }
+
+  /**
+   * Get the start time based on selected range
+   */
+  private getTimeRangeStart(): Date | null {
+    const now = new Date();
+    
+    switch (this.chartTimeRange) {
+      case '5m':
+        return new Date(now.getTime() - 5 * 60 * 1000);
+      case '15m':
+        return new Date(now.getTime() - 15 * 60 * 1000);
+      case '30m':
+        return new Date(now.getTime() - 30 * 60 * 1000);
+      case '1h':
+        return new Date(now.getTime() - 60 * 60 * 1000);
+      case '4h':
+        return new Date(now.getTime() - 4 * 60 * 60 * 1000);
+      case '1d':
+        return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      case 'custom':
+        return this.customStartDate ? new Date(this.customStartDate) : null;
+      case 'all':
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Get the end time for custom range
+   */
+  private getTimeRangeEnd(): Date | null {
+    if (this.chartTimeRange === 'custom' && this.customEndDate) {
+      return new Date(this.customEndDate);
+    }
+    return null;
+  }
+
   private makePriceChart(): void {
     const canvas = document.getElementById('priceChart') as HTMLCanvasElement;
     if (!canvas) return;
 
     // Sort trades by time (oldest → newest)
-    const sortedTrades = [...this.trades].sort(
+    let sortedTrades = [...this.trades].sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
 
-    const labels = sortedTrades.map(t =>
-      new Date(t.created_at).toLocaleTimeString()
-    );
+    // Apply time range filter
+    const startTime = this.getTimeRangeStart();
+    const endTime = this.getTimeRangeEnd();
+    
+    if (startTime) {
+      sortedTrades = sortedTrades.filter(t => new Date(t.created_at) >= startTime);
+    }
+    if (endTime) {
+      sortedTrades = sortedTrades.filter(t => new Date(t.created_at) <= endTime);
+    }
+
+    const labels = sortedTrades.map(t => {
+      const date = new Date(t.created_at);
+      // Show date + time for longer ranges
+      if (this.chartTimeRange === '1d' || this.chartTimeRange === 'custom' || this.chartTimeRange === 'all') {
+        return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      }
+      return date.toLocaleTimeString();
+    });
 
     const prices = sortedTrades.map(t => Number(t.price));
 
