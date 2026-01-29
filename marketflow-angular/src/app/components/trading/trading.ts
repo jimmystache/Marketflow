@@ -230,7 +230,7 @@ export class Trading implements OnInit, OnDestroy {
       this.trader = await this.supabaseService.getOrCreateTrader(username.trim());
       if (!this.trader) {
         throw new Error('Failed to create trader account');
-      }
+      } 
 
       this.traderId = this.trader.id;
       this.traderUsername = this.trader.username;
