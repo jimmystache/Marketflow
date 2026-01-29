@@ -439,6 +439,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  max-height: 90vh;
 }
 
 /* Symbol Header */
@@ -663,14 +664,17 @@
 
 .order-book {
   min-height: 0;
+  max-height: 80vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 
 .order-book.asks {
-  justify-content: flex-end;
+  /* justify-content: flex-end; */
   border-top: 1px solid #2d3a4f;
+  overflow-y: auto;
+  max-height: 80vh;
 }
 
 .book-row {
