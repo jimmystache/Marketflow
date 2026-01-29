@@ -4,25 +4,25 @@
     <span class="welcome-text">Welcome, <strong>{{ authService.getAccount() }}</strong></span>
   </div>
   
-  <div class="min-h-full flex flex-col items-center justify-center p-8">
-    <div class="w-full max-w-7xl">
+  <div class="min-h-full flex flex-col items-center justify-center p-6">
+    <div class="w-full max-w-6xl">
       <!-- Header Section -->
-      <div class="text-center mb-12">
-        <div class="inline-flex items-center justify-center p-3 bg-green-100 rounded-full mb-6">
-          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600" style="display: block;">
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center p-2 bg-green-100 rounded-full mb-4">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600" style="display: block;">
             <path d="M3 3v18h18"/>
             <path d="m19 9-5 5-4-4-3 3"/>
           </svg>
         </div>
-        <h1 class="mb-4 gradient-text" style="font-size: 6rem; font-weight: 500; line-height: 1.5;">MarketFlow</h1>
-        <p class="text-gray-600 max-w-2xl mx-auto" style="font-size: 1rem; line-height: 1.5;">
+        <h1 class="mb-3 gradient-text" style="font-size: 4rem; font-weight: 500; line-height: 1.2;">MarketFlow</h1>
+        <p class="text-gray-600 max-w-2xl mx-auto" style="font-size: 0.95rem; line-height: 1.4;">
           Your comprehensive platform for simulating market environments, analyzing trading sessions,
           and managing automated trading bots
         </p>
       </div>
 
       <!-- Feature Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
         <!-- Trading Simulator -->
         <card
           title="Trading Simulator"
@@ -61,10 +61,10 @@
       </div>
 
       <!-- Stats Section -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="bg-white rounded-lg p-6 border border-gray-100 shadow-sm flex items-center gap-4">
-          <div class="p-3 bg-green-50 rounded-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white rounded-lg p-4 border border-gray-100 shadow-sm flex items-center gap-3">
+          <div class="p-2 bg-green-50 rounded-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600">
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
               <circle cx="9" cy="7" r="4"/>
               <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
@@ -72,14 +72,14 @@
             </svg>
           </div>
           <div>
-            <p class="text-sm text-gray-600">Active Users</p>
-            <p class="text-green-600">24 Traders</p>
+            <p class="text-xs text-gray-600">Active Users</p>
+            <p class="text-green-600 font-semibold">24 Traders</p>
           </div>
         </div>
 
-        <div class="bg-white rounded-lg p-6 border border-gray-100 shadow-sm flex items-center gap-4">
-          <div class="p-3 bg-green-50 rounded-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600">
+        <div class="bg-white rounded-lg p-4 border border-gray-100 shadow-sm flex items-center gap-3">
+          <div class="p-2 bg-green-50 rounded-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600">
               <path d="M3 3v18h18"/>
               <path d="M18 17V9"/>
               <path d="M13 17V5"/>
@@ -87,21 +87,21 @@
             </svg>
           </div>
           <div>
-            <p class="text-sm text-gray-600">Trading Sessions</p>
-            <p class="text-green-600">127 Completed</p>
+            <p class="text-xs text-gray-600">Trading Sessions</p>
+            <p class="text-green-600 font-semibold">127 Completed</p>
           </div>
         </div>
 
-        <div class="bg-white rounded-lg p-6 border border-gray-100 shadow-sm flex items-center gap-4">
-          <div class="p-3 bg-green-50 rounded-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600">
+        <div class="bg-white rounded-lg p-4 border border-gray-100 shadow-sm flex items-center gap-3">
+          <div class="p-2 bg-green-50 rounded-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600">
               <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
               <polyline points="16 7 22 7 22 13"/>
             </svg>
           </div>
           <div>
-            <p class="text-sm text-gray-600">Total Volume</p>
-            <p class="text-green-600">$2.4M</p>
+            <p class="text-xs text-gray-600">Total Volume</p>
+            <p class="text-green-600 font-semibold">$2.4M</p>
           </div>
         </div>
       </div>
