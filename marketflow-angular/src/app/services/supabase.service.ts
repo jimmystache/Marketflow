@@ -58,6 +58,142 @@ export interface DbPosition {
   updated_at: string;
 }
 
+// ==================== ENVIRONMENT TYPES ====================
+
+export interface DbTradingEnvironment {
+  id: string;
+  name: string;
+  symbol: string;
+  description: string | null;
+  creator_id: string;
+  is_private: boolean;
+  password_hash: string | null;
+  starting_cash: number;
+  starting_shares: number;
+  min_price_change: number;
+  allow_shorting: boolean;
+  max_short_units: number;
+  status: 'open' | 'closed' | 'paused';
+  is_paused: boolean;
+  pause_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined data
+  creator?: DbTrader;
+  participant_count?: number;
+}
+
+// Simplified environment info for search results (doesn't expose sensitive settings)
+export interface DbEnvironmentSearchResult {
+  id: string;
+  name: string;
+  symbol: string;
+  description: string | null;
+  is_private: boolean;
+  status: 'open' | 'closed' | 'paused';
+  is_paused: boolean;
+  creator_id: string;
+  created_at: string;
+  creator?: { id: string; username: string };
+}
+
+export interface DbEnvironmentStock {
+  id: string;
+  market_id: string;
+  symbol: string;
+  name: string | null;
+  description: string | null;
+  starting_price: number;
+  min_price_change: number;
+  allow_shorting: boolean | null;
+  max_short_units: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbEnvironmentParticipant {
+  id: string;
+  market_id: string;
+  trader_id: string;
+  cash: number;
+  settled_cash: number;
+  available_cash: number;
+  is_admin: boolean;
+  joined_at: string;
+  updated_at: string;
+  // Joined data
+  trader?: DbTrader;
+}
+
+export interface DbEnvironmentPosition {
+  id: string;
+  market_id: string;
+  participant_id: string;
+  stock_id: string;
+  units: number;
+  avg_price: number;
+  created_at: string;
+  updated_at: string;
+  // Joined data
+  stock?: DbEnvironmentStock;
+}
+
+export interface DbEnvironmentOrder {
+  id: string;
+  market_id: string;
+  stock_id: string;
+  participant_id: string;
+  type: 'buy' | 'sell';
+  price: number;
+  units: number;
+  filled_units: number;
+  status: 'open' | 'filled' | 'partial' | 'cancelled';
+  created_at: string;
+  updated_at: string;
+  // Joined data
+  stock?: DbEnvironmentStock;
+  participant?: DbEnvironmentParticipant;
+}
+
+export interface DbEnvironmentTrade {
+  id: string;
+  market_id: string;
+  stock_id: string;
+  buy_order_id: string;
+  sell_order_id: string;
+  buyer_participant_id: string;
+  seller_participant_id: string;
+  price: number;
+  units: number;
+  created_at: string;
+  // Joined data
+  stock?: DbEnvironmentStock;
+}
+
+// Create environment input
+export interface CreateEnvironmentInput {
+  name: string;
+  description?: string;
+  is_private: boolean;
+  password?: string;
+  starting_cash: number;
+  starting_shares: number;
+  min_price_change: number;
+  allow_shorting: boolean;
+  max_short_units: number;
+}
+
+// Stock input for environment creation
+export interface CreateStockInput {
+  symbol: string;
+  name?: string;
+  description?: string;
+  starting_price: number;
+  min_price_change?: number;
+  allow_shorting?: boolean;
+  max_short_units?: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -66,15 +202,24 @@ export class SupabaseService {
   private ordersChannel: RealtimeChannel | null = null;
   private tradesChannel: RealtimeChannel | null = null;
   private tradersChannel: RealtimeChannel | null = null;
+  private environmentChannel: RealtimeChannel | null = null;
+  private envOrdersChannel: RealtimeChannel | null = null;
+  private envTradesChannel: RealtimeChannel | null = null;
 
   // Real-time subjects
   private ordersSubject = new BehaviorSubject<DbOrder[]>([]);
   private tradesSubject = new BehaviorSubject<DbTrade[]>([]);
   private tradersSubject = new BehaviorSubject<DbTrader[]>([]);
+  private environmentSubject = new BehaviorSubject<DbTradingEnvironment | null>(null);
+  private envOrdersSubject = new BehaviorSubject<DbEnvironmentOrder[]>([]);
+  private envTradesSubject = new BehaviorSubject<DbEnvironmentTrade[]>([]);
 
   public orders$ = this.ordersSubject.asObservable();
   public trades$ = this.tradesSubject.asObservable();
   public traders$ = this.tradersSubject.asObservable();
+  public environment$ = this.environmentSubject.asObservable();
+  public envOrders$ = this.envOrdersSubject.asObservable();
+  public envTrades$ = this.envTradesSubject.asObservable();
 
   constructor() {
     this.supabase = createClient(
@@ -515,5 +660,714 @@ export class SupabaseService {
       this.supabase.removeChannel(this.tradersChannel);
       this.tradersChannel = null;
     }
+    if (this.environmentChannel) {
+      this.supabase.removeChannel(this.environmentChannel);
+      this.environmentChannel = null;
+    }
+    if (this.envOrdersChannel) {
+      this.supabase.removeChannel(this.envOrdersChannel);
+      this.envOrdersChannel = null;
+    }
+    if (this.envTradesChannel) {
+      this.supabase.removeChannel(this.envTradesChannel);
+      this.envTradesChannel = null;
+    }
+  }
+
+  // ==================== TRADING ENVIRONMENT OPERATIONS ====================
+
+  /**
+   * Create a new trading environment
+   */
+  async createEnvironment(creatorId: string, input: CreateEnvironmentInput, stocks: CreateStockInput[]): Promise<DbTradingEnvironment | null> {
+    // Only hash password if it's a private environment AND password is provided
+    let passwordHash: string | null = null;
+    if (input.is_private && input.password && input.password.trim() !== '') {
+      passwordHash = btoa(input.password.trim());
+      console.log('Creating private environment with password hash');
+    }
+
+    // Validate: private environments must have a password
+    if (input.is_private && !passwordHash) {
+      console.error('Private environments require a password');
+      return null;
+    }
+
+    // Create unique symbol for the market using timestamp to avoid duplicates
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const primarySymbol = stocks.length > 0 ? `${stocks[0].symbol.toUpperCase()}-${timestamp}` : `MKT-${timestamp}`;
+
+    console.log('Creating environment:', {
+      name: input.name,
+      is_private: input.is_private,
+      has_password: !!passwordHash
+    });
+
+    const { data: env, error } = await this.supabase
+      .from('markets')
+      .insert({
+        name: input.name,
+        symbol: primarySymbol,
+        description: input.description || null,
+        creator_id: creatorId,
+        is_private: input.is_private,
+        password_hash: passwordHash,
+        starting_cash: input.starting_cash,
+        starting_shares: input.starting_shares,
+        min_price_change: input.min_price_change,
+        allow_shorting: input.allow_shorting,
+        max_short_units: input.max_short_units,
+        status: 'open',
+        is_paused: false
+      })
+      .select()
+      .single();
+
+    if (error || !env) {
+      console.error('Error creating environment:', error);
+      return null;
+    }
+
+    console.log('Environment created successfully:', env.id);
+
+    // Create stocks for the environment
+    if (stocks.length > 0) {
+      const stockInserts = stocks.map(s => ({
+        market_id: env.id,
+        symbol: s.symbol.toUpperCase(),
+        name: s.name || s.symbol.toUpperCase(),
+        description: s.description || null,
+        starting_price: s.starting_price,
+        min_price_change: s.min_price_change ?? input.min_price_change,
+        allow_shorting: s.allow_shorting ?? null,
+        max_short_units: s.max_short_units ?? null
+      }));
+
+      const { error: stockError } = await this.supabase
+        .from('environment_stocks')
+        .insert(stockInserts);
+
+      if (stockError) {
+        console.error('Error creating stocks:', stockError);
+      }
+    }
+
+    // Add creator as participant and admin (skip password check for creator)
+    await this.addCreatorAsParticipant(env.id, creatorId, env.starting_cash, env.starting_shares);
+
+    return env;
+  }
+
+  /**
+   * Add the creator as a participant (bypasses password check)
+   */
+  private async addCreatorAsParticipant(environmentId: string, creatorId: string, startingCash: number, startingShares: number): Promise<DbEnvironmentParticipant | null> {
+    // Create participant directly (no password check needed for creator)
+    const { data, error } = await this.supabase
+      .from('environment_participants')
+      .insert({
+        market_id: environmentId,
+        trader_id: creatorId,
+        cash: startingCash,
+        settled_cash: startingCash,
+        available_cash: startingCash,
+        is_admin: true
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding creator as participant:', error);
+      return null;
+    }
+
+    // Create positions for all stocks in the environment
+    const stocks = await this.getEnvironmentStocks(environmentId);
+    for (const stock of stocks) {
+      await this.supabase
+        .from('environment_positions')
+        .insert({
+          market_id: environmentId,
+          participant_id: data.id,
+          stock_id: stock.id,
+          units: startingShares,
+          avg_price: 0
+        });
+    }
+
+    console.log('Creator added as participant:', data.id);
+    return data;
+  }
+
+  /**
+   * Get all public environments (for browsing)
+   */
+  async getPublicEnvironments(): Promise<DbTradingEnvironment[]> {
+    const { data, error } = await this.supabase
+      .from('markets')
+      .select(`
+        *,
+        creator:traders!creator_id(id, username)
+      `)
+      .eq('is_private', false)
+      .eq('status', 'open')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching environments:', error);
+      return [];
+    }
+
+    // Get participant counts
+    const envIds = data?.map(e => e.id) || [];
+    if (envIds.length > 0) {
+      const { data: counts } = await this.supabase
+        .from('environment_participants')
+        .select('market_id')
+        .in('market_id', envIds);
+
+      const countMap = new Map<string, number>();
+      counts?.forEach(c => {
+        countMap.set(c.market_id, (countMap.get(c.market_id) || 0) + 1);
+      });
+
+      return (data || []).map(e => ({
+        ...e,
+        participant_count: countMap.get(e.id) || 0
+      }));
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Search environments by name (includes private environments)
+   * Returns limited info for private environments until password is verified
+   */
+  async searchEnvironments(searchTerm: string): Promise<DbEnvironmentSearchResult[]> {
+    if (!searchTerm || searchTerm.length < 2) {
+      return [];
+    }
+
+    const { data, error } = await this.supabase
+      .from('markets')
+      .select(`
+        id,
+        name,
+        symbol,
+        description,
+        is_private,
+        status,
+        is_paused,
+        creator_id,
+        created_at,
+        creator:traders!creator_id(id, username)
+      `)
+      .ilike('name', `%${searchTerm}%`)
+      .eq('status', 'open')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error) {
+      console.error('Error searching environments:', error);
+      return [];
+    }
+
+    // Map the data to flatten creator from array to single object
+    return (data || []).map(env => ({
+      ...env,
+      creator: Array.isArray(env.creator) && env.creator.length > 0 ? env.creator[0] : undefined
+    }));
+  }
+
+  /**
+   * Get environment by ID (for joining private environments)
+   */
+  async getEnvironmentByIdPublic(environmentId: string): Promise<DbEnvironmentSearchResult | null> {
+    const { data, error } = await this.supabase
+      .from('markets')
+      .select(`
+        id,
+        name,
+        symbol,
+        description,
+        is_private,
+        status,
+        is_paused,
+        creator_id,
+        created_at,
+        creator:traders!creator_id(id, username)
+      `)
+      .eq('id', environmentId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching environment by ID:', error);
+      return null;
+    }
+
+    // Flatten creator from array to single object
+    return {
+      ...data,
+      creator: Array.isArray(data.creator) && data.creator.length > 0 ? data.creator[0] : undefined
+    };
+  }
+
+  /**
+   * Get environments a trader has joined
+   */
+  async getTraderEnvironments(traderId: string): Promise<DbTradingEnvironment[]> {
+    const { data: participations, error: pError } = await this.supabase
+      .from('environment_participants')
+      .select('market_id')
+      .eq('trader_id', traderId);
+
+    if (pError || !participations?.length) {
+      return [];
+    }
+
+    const envIds = participations.map(p => p.market_id);
+
+    const { data, error } = await this.supabase
+      .from('markets')
+      .select(`
+        *,
+        creator:traders!creator_id(id, username)
+      `)
+      .in('id', envIds)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching trader environments:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Get a single environment by ID
+   */
+  async getEnvironment(environmentId: string): Promise<DbTradingEnvironment | null> {
+    const { data, error } = await this.supabase
+      .from('markets')
+      .select(`
+        *,
+        creator:traders!creator_id(id, username)
+      `)
+      .eq('id', environmentId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching environment:', error);
+      return null;
+    }
+
+    return data;
+  }
+
+  /**
+   * Join an environment - returns participant data or throws error with specific message
+   */
+  async joinEnvironment(environmentId: string, traderId: string, isAdmin: boolean = false, password?: string): Promise<DbEnvironmentParticipant> {
+    // Get environment to check settings
+    const env = await this.getEnvironment(environmentId);
+    if (!env) {
+      throw new Error('Environment not found');
+    }
+
+    // Check if already joined (participants can rejoin without password)
+    const { data: existing } = await this.supabase
+      .from('environment_participants')
+      .select('*')
+      .eq('market_id', environmentId)
+      .eq('trader_id', traderId)
+      .single();
+
+    if (existing) {
+      console.log('User already a participant, returning existing record');
+      return existing;
+    }
+
+    // Check password if private (only for new joiners who are not admins)
+    if (env.is_private && env.password_hash && !isAdmin) {
+      console.log('Private environment - validating password');
+      
+      if (!password || password.trim() === '') {
+        throw new Error('PASSWORD_REQUIRED');
+      }
+      
+      const providedHash = btoa(password.trim());
+      console.log('Password validation:', { 
+        provided: providedHash.substring(0, 5) + '...', 
+        expected: env.password_hash.substring(0, 5) + '...',
+        match: providedHash === env.password_hash
+      });
+      
+      if (providedHash !== env.password_hash) {
+        throw new Error('INVALID_PASSWORD');
+      }
+      
+      console.log('Password validated successfully');
+    }
+
+    // Create participant
+    const { data, error } = await this.supabase
+      .from('environment_participants')
+      .insert({
+        market_id: environmentId,
+        trader_id: traderId,
+        cash: env.starting_cash,
+        settled_cash: env.starting_cash,
+        available_cash: env.starting_cash,
+        is_admin: isAdmin
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error joining environment:', error);
+      throw new Error('Failed to join environment: ' + error.message);
+    }
+
+    // Create positions for all stocks in the environment
+    const stocks = await this.getEnvironmentStocks(environmentId);
+    for (const stock of stocks) {
+      await this.supabase
+        .from('environment_positions')
+        .insert({
+          market_id: environmentId,
+          participant_id: data.id,
+          stock_id: stock.id,
+          units: env.starting_shares,
+          avg_price: 0
+        });
+    }
+
+    return data;
+  }
+
+  /**
+   * Get participant info
+   */
+  async getParticipant(environmentId: string, traderId: string): Promise<DbEnvironmentParticipant | null> {
+    const { data, error } = await this.supabase
+      .from('environment_participants')
+      .select(`
+        *,
+        trader:traders!trader_id(id, username)
+      `)
+      .eq('market_id', environmentId)
+      .eq('trader_id', traderId)
+      .single();
+
+    if (error) {
+      return null;
+    }
+
+    return data;
+  }
+
+  /**
+   * Update participant cash
+   */
+  async updateParticipantCash(participantId: string, cash: number, settledCash: number, availableCash: number): Promise<boolean> {
+    const { error } = await this.supabase
+      .from('environment_participants')
+      .update({
+        cash,
+        settled_cash: settledCash,
+        available_cash: availableCash
+      })
+      .eq('id', participantId);
+
+    return !error;
+  }
+
+  /**
+   * Get stocks in an environment
+   */
+  async getEnvironmentStocks(environmentId: string): Promise<DbEnvironmentStock[]> {
+    const { data, error } = await this.supabase
+      .from('environment_stocks')
+      .select('*')
+      .eq('market_id', environmentId)
+      .order('symbol', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching stocks:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Get participant positions
+   */
+  async getParticipantPositions(participantId: string): Promise<DbEnvironmentPosition[]> {
+    const { data, error } = await this.supabase
+      .from('environment_positions')
+      .select(`
+        *,
+        stock:environment_stocks!stock_id(*)
+      `)
+      .eq('participant_id', participantId);
+
+    if (error) {
+      console.error('Error fetching positions:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Update environment position
+   */
+  async updateEnvironmentPosition(positionId: string, units: number, avgPrice: number): Promise<boolean> {
+    const { error } = await this.supabase
+      .from('environment_positions')
+      .update({
+        units,
+        avg_price: avgPrice
+      })
+      .eq('id', positionId);
+
+    return !error;
+  }
+
+  /**
+   * Place an order in an environment
+   */
+  async placeEnvironmentOrder(order: Omit<DbEnvironmentOrder, 'id' | 'created_at' | 'updated_at'>): Promise<DbEnvironmentOrder | null> {
+    const { data, error } = await this.supabase
+      .from('environment_orders')
+      .insert(order)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error placing environment order:', error);
+      return null;
+    }
+
+    return data;
+  }
+
+  /**
+   * Get open orders for a stock in an environment
+   */
+  async getEnvironmentOpenOrders(environmentId: string, stockId: string): Promise<DbEnvironmentOrder[]> {
+    const { data, error } = await this.supabase
+      .from('environment_orders')
+      .select('*')
+      .eq('market_id', environmentId)
+      .eq('stock_id', stockId)
+      .in('status', ['open', 'partial'])
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching environment orders:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Get participant orders
+   */
+  async getParticipantOrders(participantId: string, stockId: string): Promise<DbEnvironmentOrder[]> {
+    const { data, error } = await this.supabase
+      .from('environment_orders')
+      .select('*')
+      .eq('participant_id', participantId)
+      .eq('stock_id', stockId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching participant orders:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Update environment order
+   */
+  async updateEnvironmentOrder(orderId: string, updates: Partial<DbEnvironmentOrder>): Promise<boolean> {
+    const { error } = await this.supabase
+      .from('environment_orders')
+      .update(updates)
+      .eq('id', orderId);
+
+    return !error;
+  }
+
+  /**
+   * Cancel environment order
+   */
+  async cancelEnvironmentOrder(orderId: string): Promise<boolean> {
+    return this.updateEnvironmentOrder(orderId, { status: 'cancelled' });
+  }
+
+  /**
+   * Record an environment trade
+   */
+  async recordEnvironmentTrade(trade: Omit<DbEnvironmentTrade, 'id' | 'created_at'>): Promise<DbEnvironmentTrade | null> {
+    const { data, error } = await this.supabase
+      .from('environment_trades')
+      .insert(trade)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error recording environment trade:', error);
+      return null;
+    }
+
+    return data;
+  }
+
+  /**
+   * Get trades for a stock in an environment
+   */
+  async getEnvironmentTrades(environmentId: string, stockId: string, limit: number = 50): Promise<DbEnvironmentTrade[]> {
+    const { data, error } = await this.supabase
+      .from('environment_trades')
+      .select('*')
+      .eq('market_id', environmentId)
+      .eq('stock_id', stockId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching environment trades:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Pause/unpause an environment (admin only)
+   */
+  async toggleEnvironmentPause(environmentId: string, isPaused: boolean, reason?: string): Promise<boolean> {
+    const { error } = await this.supabase
+      .from('markets')
+      .update({
+        is_paused: isPaused,
+        pause_reason: reason || null,
+        status: isPaused ? 'paused' : 'open'
+      })
+      .eq('id', environmentId);
+
+    return !error;
+  }
+
+  // ==================== ENVIRONMENT REAL-TIME SUBSCRIPTIONS ====================
+
+  /**
+   * Subscribe to environment updates
+   */
+  subscribeToEnvironment(environmentId: string, callback: (env: DbTradingEnvironment | null) => void): void {
+    if (this.environmentChannel) {
+      this.supabase.removeChannel(this.environmentChannel);
+    }
+
+    // Initial load
+    this.getEnvironment(environmentId).then(env => {
+      this.environmentSubject.next(env);
+      callback(env);
+    });
+
+    // Subscribe to changes
+    this.environmentChannel = this.supabase
+      .channel(`environment:${environmentId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'markets',
+          filter: `id=eq.${environmentId}`
+        },
+        async () => {
+          const env = await this.getEnvironment(environmentId);
+          this.environmentSubject.next(env);
+          callback(env);
+        }
+      )
+      .subscribe();
+  }
+
+  /**
+   * Subscribe to environment orders
+   */
+  subscribeToEnvironmentOrders(environmentId: string, stockId: string, callback: (orders: DbEnvironmentOrder[]) => void): void {
+    if (this.envOrdersChannel) {
+      this.supabase.removeChannel(this.envOrdersChannel);
+    }
+
+    // Initial load
+    this.getEnvironmentOpenOrders(environmentId, stockId).then(orders => {
+      this.envOrdersSubject.next(orders);
+      callback(orders);
+    });
+
+    // Subscribe to changes
+    this.envOrdersChannel = this.supabase
+      .channel(`env_orders:${environmentId}:${stockId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'environment_orders',
+          filter: `market_id=eq.${environmentId}`
+        },
+        async () => {
+          const orders = await this.getEnvironmentOpenOrders(environmentId, stockId);
+          this.envOrdersSubject.next(orders);
+          callback(orders);
+        }
+      )
+      .subscribe();
+  }
+
+  /**
+   * Subscribe to environment trades
+   */
+  subscribeToEnvironmentTrades(environmentId: string, stockId: string, callback: (trades: DbEnvironmentTrade[]) => void): void {
+    if (this.envTradesChannel) {
+      this.supabase.removeChannel(this.envTradesChannel);
+    }
+
+    // Initial load
+    this.getEnvironmentTrades(environmentId, stockId).then(trades => {
+      this.envTradesSubject.next(trades);
+      callback(trades);
+    });
+
+    // Subscribe to new trades
+    this.envTradesChannel = this.supabase
+      .channel(`env_trades:${environmentId}:${stockId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'environment_trades',
+          filter: `market_id=eq.${environmentId}`
+        },
+        async () => {
+          const trades = await this.getEnvironmentTrades(environmentId, stockId);
+          this.envTradesSubject.next(trades);
+          callback(trades);
+        }
+      )
+      .subscribe();
   }
 }
