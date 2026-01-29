@@ -272,6 +272,9 @@ export class Trading implements OnInit, OnDestroy {
   // Chart
   priceChart: Chart | null = null;
 
+  copiedHint: string = '';
+  private copiedHintTimer: ReturnType<typeof setTimeout> | null = null;
+
   // Username input for login
   usernameInput: string = '';
   isLoggingIn: boolean = false;
@@ -913,6 +916,9 @@ export class Trading implements OnInit, OnDestroy {
     if (this.trades.length > 0) {
       this.lastPrice = Number(this.trades[0].price);
     }
+
+    // Keep the live order book chart in sync in environment mode.
+    this.rebuildPriceSeriesFromTrades();
   }
 
   /**
@@ -1552,6 +1558,61 @@ export class Trading implements OnInit, OnDestroy {
   formatTime(timestamp: string): string {
     const date = new Date(timestamp);
     return date.toLocaleTimeString();
+  }
+
+  shortId(id: string, left: number = 6, right: number = 4): string {
+    const v = String(id || '');
+    if (!v) return '';
+    if (v.length <= left + right + 3) return v;
+    return `${v.slice(0, left)}…${v.slice(-right)}`;
+  }
+
+  async copyEnvironmentId(): Promise<void> {
+    if (!this.environmentId) return;
+    await this.copyToClipboard(this.environmentId, 'Environment ID copied');
+  }
+
+  async copyStockId(): Promise<void> {
+    if (!this.selectedStockId) return;
+    await this.copyToClipboard(this.selectedStockId, 'Stock ID copied');
+  }
+
+  private async copyToClipboard(text: string, hint: string): Promise<void> {
+    const value = String(text || '');
+    if (!value) return;
+
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const el = document.createElement('textarea');
+        el.value = value;
+        el.style.position = 'fixed';
+        el.style.top = '0';
+        el.style.left = '0';
+        el.style.opacity = '0';
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+
+      this.copiedHint = hint;
+      if (this.copiedHintTimer) clearTimeout(this.copiedHintTimer);
+      this.copiedHintTimer = setTimeout(() => {
+        this.copiedHint = '';
+        this.copiedHintTimer = null;
+      }, 1500);
+    } catch (error) {
+      console.error('Copy failed:', error);
+      this.copiedHint = 'Copy failed';
+      if (this.copiedHintTimer) clearTimeout(this.copiedHintTimer);
+      this.copiedHintTimer = setTimeout(() => {
+        this.copiedHint = '';
+        this.copiedHintTimer = null;
+      }, 1500);
+    }
   }
 
   private makePriceChart(): void {

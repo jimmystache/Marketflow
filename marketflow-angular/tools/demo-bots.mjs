@@ -105,6 +105,22 @@ async function upsertMarket(supabase, symbol, name) {
   return data;
 }
 
+async function getMarketById(supabase, marketId) {
+  const id = String(marketId || '').trim();
+  if (!id) throw new Error('Missing market id');
+  const { data, error } = await supabase.from('markets').select('*').eq('id', id).single();
+  if (error) throw error;
+  return data;
+}
+
+async function getEnvironmentStockById(supabase, stockId) {
+  const id = String(stockId || '').trim();
+  if (!id) throw new Error('Missing stock id');
+  const { data, error } = await supabase.from('environment_stocks').select('*').eq('id', id).single();
+  if (error) throw error;
+  return data;
+}
+
 async function getOrCreateTrader(supabase, username) {
   const { data: existing } = await supabase.from('traders').select('*').eq('username', username).single();
   if (existing) return existing;
@@ -119,19 +135,27 @@ async function getOrCreateTrader(supabase, username) {
   return data;
 }
 
-async function getOrCreatePosition(supabase, traderId, marketId) {
-  const { data: existing } = await supabase
-    .from('positions')
-    .select('*')
-    .eq('trader_id', traderId)
-    .eq('market_id', marketId)
-    .single();
+async function getOrCreateEnvironmentStock(supabase, marketId, symbol, startingPrice) {
+  const sym = String(symbol || '').trim().toUpperCase();
+  if (!sym) throw new Error('Missing --stock (symbol)');
 
+  const { data: existing } = await supabase
+    .from('environment_stocks')
+    .select('*')
+    .eq('market_id', marketId)
+    .eq('symbol', sym)
+    .single();
   if (existing) return existing;
 
   const { data, error } = await supabase
-    .from('positions')
-    .insert({ trader_id: traderId, market_id: marketId, units: 100, avg_price: 0 })
+    .from('environment_stocks')
+    .insert({
+      market_id: marketId,
+      symbol: sym,
+      name: `${sym} Demo Stock`,
+      starting_price: Number(startingPrice) || 100,
+      min_price_change: 0.01
+    })
     .select('*')
     .single();
 
@@ -139,12 +163,66 @@ async function getOrCreatePosition(supabase, traderId, marketId) {
   return data;
 }
 
-async function placeOrder(supabase, { marketId, traderId, type, price, units }) {
+async function getOrCreateParticipant(supabase, marketId, traderId, startingCash) {
+  const { data: existing } = await supabase
+    .from('environment_participants')
+    .select('*')
+    .eq('market_id', marketId)
+    .eq('trader_id', traderId)
+    .single();
+  if (existing) return existing;
+
+  const cash = Number(startingCash) || 10000;
   const { data, error } = await supabase
-    .from('orders')
+    .from('environment_participants')
     .insert({
       market_id: marketId,
       trader_id: traderId,
+      cash,
+      settled_cash: cash,
+      available_cash: cash,
+      is_admin: false
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+async function getOrCreateEnvironmentPosition(supabase, marketId, participantId, stockId, startingUnits) {
+  const { data: existing } = await supabase
+    .from('environment_positions')
+    .select('*')
+    .eq('participant_id', participantId)
+    .eq('stock_id', stockId)
+    .single();
+
+  if (existing) return existing;
+
+  const { data, error } = await supabase
+    .from('environment_positions')
+    .insert({
+      market_id: marketId,
+      participant_id: participantId,
+      stock_id: stockId,
+      units: Number(startingUnits) || 100,
+      avg_price: 0
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+async function placeOrder(supabase, { marketId, stockId, participantId, type, price, units }) {
+  const { data, error } = await supabase
+    .from('environment_orders')
+    .insert({
+      market_id: marketId,
+      stock_id: stockId,
+      participant_id: participantId,
       type,
       price,
       units,
@@ -160,7 +238,7 @@ async function placeOrder(supabase, { marketId, traderId, type, price, units }) 
 
 async function updateOrderFill(supabase, orderId, filledUnits, status) {
   const { error } = await supabase
-    .from('orders')
+    .from('environment_orders')
     .update({ filled_units: filledUnits, status, updated_at: new Date().toISOString() })
     .eq('id', orderId);
   if (error) throw error;
@@ -168,7 +246,7 @@ async function updateOrderFill(supabase, orderId, filledUnits, status) {
 
 async function cancelOrder(supabase, orderId) {
   const { error } = await supabase
-    .from('orders')
+    .from('environment_orders')
     .update({ status: 'cancelled', updated_at: new Date().toISOString() })
     .eq('id', orderId);
   if (error) throw error;
@@ -176,13 +254,14 @@ async function cancelOrder(supabase, orderId) {
 
 async function recordTrade(supabase, { marketId, buyOrder, sellOrder, price, units }) {
   const { data, error } = await supabase
-    .from('trades')
+    .from('environment_trades')
     .insert({
       market_id: marketId,
+      stock_id: buyOrder.stock_id,
       buy_order_id: buyOrder.id,
       sell_order_id: sellOrder.id,
-      buyer_id: buyOrder.trader_id,
-      seller_id: sellOrder.trader_id,
+      buyer_participant_id: buyOrder.participant_id,
+      seller_participant_id: sellOrder.participant_id,
       price,
       units
     })
@@ -193,12 +272,13 @@ async function recordTrade(supabase, { marketId, buyOrder, sellOrder, price, uni
   return data;
 }
 
-async function tryMatchOne(supabase, marketId) {
+async function tryMatchOne(supabase, marketId, stockId) {
   // Find best bid and best ask among open/partial orders.
   const { data: openOrders, error } = await supabase
-    .from('orders')
+    .from('environment_orders')
     .select('*')
     .eq('market_id', marketId)
+    .eq('stock_id', stockId)
     .in('status', ['open', 'partial']);
 
   if (error) throw error;
@@ -235,11 +315,11 @@ async function tryMatchOne(supabase, marketId) {
   return true;
 }
 
-async function tryMatchMany(supabase, marketId, maxMatches) {
+async function tryMatchMany(supabase, marketId, stockId, maxMatches) {
   let didAny = false;
   for (let i = 0; i < maxMatches; i++) {
     // eslint-disable-next-line no-await-in-loop
-    const did = await tryMatchOne(supabase, marketId);
+    const did = await tryMatchOne(supabase, marketId, stockId);
     if (!did) break;
     didAny = true;
   }
@@ -253,7 +333,8 @@ async function main() {
     console.log(`Demo bots for MarketFlow (Supabase)
 
 Usage:
-  npm run demo:bots -- --symbol MKT --bots 10 --intervalMs 450
+  npm run demo:bots -- --symbol ENV --stock MKT --bots 10 --intervalMs 450
+  npm run demo:bots -- --environmentId <uuid> --stockId <uuid>
 
 Credentials (env or args):
   SUPABASE_URL, SUPABASE_ANON_KEY
@@ -261,6 +342,9 @@ Credentials (env or args):
 
 Common options:
   --durationSec 30       Stop after N seconds (default: 30)
+  --environmentId <uuid> Target a specific environment by id (overrides --symbol)
+  --stock MKT            Stock symbol within the environment (default: MKT)
+  --stockId <uuid>       Target a specific stock by id (overrides --stock)
   --bots 8               Number of bot traders
   --intervalMs 450       Main loop tick interval
   --basePrice 200        Starting mid price
@@ -285,7 +369,10 @@ Common options:
     process.exit(1);
   }
 
+  const environmentIdArg = getArg('environmentId', '');
   const symbol = getArg('symbol', 'MKT');
+  const stockIdArg = getArg('stockId', '');
+  const stockSymbol = getArg('stock', 'MKT');
   const bots = toInt(getArg('bots', '8'), 8);
   const intervalMs = toInt(getArg('intervalMs', '450'), 450);
   const durationSec = toInt(getArg('durationSec', '30'), 30);
@@ -306,7 +393,19 @@ Common options:
 
   const supabase = createClient(url, key);
 
-  const market = await upsertMarket(supabase, symbol, `${symbol} Demo Market`);
+  const market = environmentIdArg
+    ? await getMarketById(supabase, environmentIdArg)
+    : await upsertMarket(supabase, symbol, `${symbol} Demo Market`);
+
+  const stock = stockIdArg
+    ? await getEnvironmentStockById(supabase, stockIdArg)
+    : await getOrCreateEnvironmentStock(supabase, market.id, stockSymbol, basePrice);
+
+  if (stock.market_id !== market.id) {
+    throw new Error(
+      `Stock ${stock.id} belongs to environment ${stock.market_id}, not ${market.id}. Pick a matching --environmentId/--stockId pair.`
+    );
+  }
 
   // Per-bot personality makes the flow look more human.
   const personalities = [
@@ -319,11 +418,13 @@ Common options:
   for (let i = 0; i < bots; i++) {
     const username = `BOT_${String(i + 1).padStart(2, '0')}`;
     const trader = await getOrCreateTrader(supabase, username);
-    await getOrCreatePosition(supabase, trader.id, market.id);
-    botUsers.push(trader);
+    const participant = await getOrCreateParticipant(supabase, market.id, trader.id, 10000);
+    await getOrCreateEnvironmentPosition(supabase, market.id, participant.id, stock.id, 100);
+    botUsers.push({ trader, participant });
   }
 
-  console.log(`Demo bots running for market ${symbol} (${market.id})`);
+  console.log(`Demo bots running for environment ${market.symbol} (${market.id})`);
+  console.log(`- stock=${stock.symbol} (${stock.id})`);
   console.log(`- bots=${bots} intervalMs=${intervalMs} durationSec=${durationSec || '∞'}`);
   console.log('Press Ctrl+C to stop.');
 
@@ -345,10 +446,11 @@ Common options:
     console.log('\nStopping...');
   });
 
-  const botState = botUsers.map((trader, i) => {
+  const botState = botUsers.map((u, i) => {
     const personality = personalities[i % personalities.length];
     return {
-      trader,
+      trader: u.trader,
+      participant: u.participant,
       personality,
       nextActionAt: nowMs() + randInt(50, 1000),
       burstUntil: 0,
@@ -389,7 +491,7 @@ Common options:
     // Every loop: try to match a few times to keep trades flowing.
     try {
       // eslint-disable-next-line no-await-in-loop
-      await tryMatchMany(supabase, market.id, regime.quiet ? 1 : 3);
+      await tryMatchMany(supabase, market.id, stock.id, regime.quiet ? 1 : 3);
     } catch {
       // ignore
     }
@@ -445,15 +547,15 @@ Common options:
 
       if (wantsTrade && willInject) {
         // Inject a crossing pair between two bots to guarantee a print.
-        const buyer = b.trader;
-        const seller = pick(botUsers.filter((x) => x.id !== buyer.id));
+        const buyer = b.participant;
+        const seller = pick(botUsers.filter((x) => x.participant.id !== buyer.id)).participant;
         const buyPx = Number((mid + regime.spread / 2 + randBetween(0.01, 0.25)).toFixed(2));
         const sellPx = Number((mid - regime.spread / 2 - randBetween(0.01, 0.25)).toFixed(2));
         try {
           // eslint-disable-next-line no-await-in-loop
-          const buy = await placeOrder(supabase, { marketId: market.id, traderId: buyer.id, type: 'buy', price: buyPx, units });
+          const buy = await placeOrder(supabase, { marketId: market.id, stockId: stock.id, participantId: buyer.id, type: 'buy', price: buyPx, units });
           // eslint-disable-next-line no-await-in-loop
-          const sell = await placeOrder(supabase, { marketId: market.id, traderId: seller.id, type: 'sell', price: sellPx, units });
+          const sell = await placeOrder(supabase, { marketId: market.id, stockId: stock.id, participantId: seller.id, type: 'sell', price: sellPx, units });
 
           // eslint-disable-next-line no-await-in-loop
           await recordTrade(supabase, { marketId: market.id, buyOrder: buy, sellOrder: sell, price: Number(mid.toFixed(2)), units });
@@ -486,7 +588,8 @@ Common options:
         // eslint-disable-next-line no-await-in-loop
         const order = await placeOrder(supabase, {
           marketId: market.id,
-          traderId: b.trader.id,
+          stockId: stock.id,
+          participantId: b.participant.id,
           type: side,
           price,
           units

@@ -400,6 +400,28 @@
         <div class="market-info">
           <span class="market-label">{{ currentEnvironment?.name || 'MARKETFLOW' }}</span>
           <span class="market-id">{{ symbol }}</span>
+
+          <div class="id-strip" *ngIf="environmentId || selectedStockId">
+            <button
+              class="id-pill"
+              type="button"
+              *ngIf="environmentId"
+              (click)="copyEnvironmentId()"
+              title="Copy environment id"
+            >
+              ENV: <span class="id-mono">{{ shortId(environmentId) }}</span>
+            </button>
+            <button
+              class="id-pill"
+              type="button"
+              *ngIf="selectedStockId"
+              (click)="copyStockId()"
+              title="Copy stock id"
+            >
+              STK: <span class="id-mono">{{ shortId(selectedStockId) }}</span>
+            </button>
+            <span class="copy-hint" *ngIf="copiedHint">{{ copiedHint }}</span>
+          </div>
         </div>
       </div>
       
