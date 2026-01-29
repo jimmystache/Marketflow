@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -254,6 +254,13 @@ export class Trading implements OnInit, OnDestroy {
 
   private tradePointTimes: number[] = [];
 
+  @ViewChild(BaseChartDirective)
+  private priceChartDirective?: BaseChartDirective;
+
+  private priceSeriesRebuildTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastPriceSeriesRebuildAt = 0;
+  private readonly priceSeriesRebuildMinIntervalMs = 120;
+
   // My orders
   myOrders: LocalOrder[] = [];
 
@@ -315,6 +322,16 @@ export class Trading implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.supabaseService.unsubscribeAll();
+
+    if (this.priceSeriesRebuildTimer) {
+      clearTimeout(this.priceSeriesRebuildTimer);
+      this.priceSeriesRebuildTimer = null;
+    }
+
+    if (this.copiedHintTimer) {
+      clearTimeout(this.copiedHintTimer);
+      this.copiedHintTimer = null;
+    }
   }
 
   /**
@@ -1042,23 +1059,64 @@ export class Trading implements OnInit, OnDestroy {
   }
 
   private rebuildPriceSeriesFromTrades(): void {
-    if (!this.trades || this.trades.length === 0) {
-      (this.priceChartData.datasets[0] as any).data = [];
+    // Coalesce rapid-fire inserts (demo bots) to avoid rebuilding on every tick.
+    if (this.priceSeriesRebuildTimer) return;
+
+    const now = Date.now();
+    const elapsed = now - this.lastPriceSeriesRebuildAt;
+    const delay = elapsed >= this.priceSeriesRebuildMinIntervalMs
+      ? 0
+      : this.priceSeriesRebuildMinIntervalMs - elapsed;
+
+    this.priceSeriesRebuildTimer = setTimeout(() => {
+      this.priceSeriesRebuildTimer = null;
+      this.lastPriceSeriesRebuildAt = Date.now();
+      this.rebuildPriceSeriesFromTradesNow();
+    }, delay);
+  }
+
+  private rebuildPriceSeriesFromTradesNow(): void {
+    const datasetTemplate = (this.priceChartData.datasets?.[0] as any) ?? {};
+    const maxPoints = 400;
+
+    const trades = this.trades ?? [];
+    if (trades.length === 0) {
       this.tradePointTimes = [];
+      this.priceChartData = {
+        datasets: [
+          {
+            ...datasetTemplate,
+            data: [],
+          },
+        ],
+      };
+      queueMicrotask(() => this.priceChartDirective?.update());
       return;
     }
 
-    const sorted = [...this.trades].sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-    );
+    // Most service calls already return newest-first; avoid O(n log n) sort when possible.
+    const maybeDesc =
+      trades.length < 2 ||
+      new Date(trades[0].created_at).getTime() >= new Date(trades[1].created_at).getTime();
 
-    const maxPoints = 400;
-    const clipped = sorted.length > maxPoints ? sorted.slice(-maxPoints) : sorted;
+    const clippedOldestToNewest: DbTrade[] = (() => {
+      if (maybeDesc) {
+        const latest = trades.length > maxPoints ? trades.slice(0, maxPoints) : trades.slice();
+        return latest.slice().reverse();
+      }
+
+      const sorted = trades
+        .slice()
+        .sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        );
+      return sorted.length > maxPoints ? sorted.slice(-maxPoints) : sorted;
+    })();
 
     const points: Array<{ x: number; y: number }> = [];
     const times: number[] = [];
 
-    for (const t of clipped) {
+    for (const t of clippedOldestToNewest) {
       const ts = new Date(t.created_at).getTime();
       const price = Number(t.price);
       if (!Number.isFinite(price)) continue;
@@ -1068,15 +1126,18 @@ export class Trading implements OnInit, OnDestroy {
 
     this.tradePointTimes = times;
 
-    // Replace dataset to keep change detection happy.
+    // Replace dataset reference to keep Angular + ng2-charts change detection happy.
     this.priceChartData = {
       datasets: [
         {
-          ...(this.priceChartData.datasets[0] as any),
+          ...datasetTemplate,
           data: points,
         },
       ],
     };
+
+    // Ensure the directive redraws even if the canvas stays mounted.
+    queueMicrotask(() => this.priceChartDirective?.update());
   }
 
   /**
