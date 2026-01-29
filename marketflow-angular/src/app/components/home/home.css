@@ -5,18 +5,21 @@
 .flex-col { flex-direction: column; }
 .items-center { align-items: center; }
 .justify-center { justify-content: center; }
-.p-8 { padding: 2rem; }
+.p-6 { padding: 1.5rem; }
 .w-full { width: 100%; }
-.max-w-7xl { max-width: 1100px; margin-left: auto; margin-right: auto; }
+.max-w-6xl { max-width: 1024px; margin-left: auto; margin-right: auto; }
 .text-center { text-align: center; }
-.mb-12 { margin-bottom: 3rem; }
-.mb-6 { margin-bottom: 1.5rem; }
+.mb-8 { margin-bottom: 2rem; }
 .mb-4 { margin-bottom: 1rem; }
-.gap-8 { gap: 2rem; }
-.gap-6 { gap: 1.5rem; }
+.mb-3 { margin-bottom: 0.75rem; }
+.gap-5 { gap: 1.25rem; }
+.gap-4 { gap: 1rem; }
+.gap-3 { gap: 0.75rem; }
 .grid { display: grid; }
 .grid-cols-1 { grid-template-columns: 1fr; }
 @media (min-width: 768px) { .md\:grid-cols-3 { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 768px) { .md\:grid-cols-2 { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1024px) { .lg\:grid-cols-4 { grid-template-columns: repeat(4, 1fr); } }
 
 /* Typography */
 .site-title {

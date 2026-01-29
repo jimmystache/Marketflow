@@ -784,6 +784,46 @@
         </div>
       </div>
       <div class="tab-content" *ngIf="activeTab === 'graph'">
+        <div class="graph-header">
+          <div class="time-range-selector">
+            <label for="timeRange">Time Range:</label>
+            <select 
+              id="timeRange" 
+              [(ngModel)]="chartTimeRange" 
+              (change)="onTimeRangeChange()"
+              class="time-range-dropdown">
+              <option *ngFor="let option of chartTimeRangeOptions" [value]="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="custom-date-picker" *ngIf="showCustomDatePicker">
+            <div class="date-input-group">
+              <label for="startDate">From:</label>
+              <input 
+                type="datetime-local" 
+                id="startDate" 
+                [(ngModel)]="customStartDate"
+                class="date-input">
+            </div>
+            <div class="date-input-group">
+              <label for="endDate">To:</label>
+              <input 
+                type="datetime-local" 
+                id="endDate" 
+                [(ngModel)]="customEndDate"
+                class="date-input">
+            </div>
+            <button 
+              class="apply-date-btn"
+              (click)="applyCustomDateRange()"
+              [disabled]="!customStartDate || !customEndDate">
+              Apply
+            </button>
+          </div>
+        </div>
+        
         <div class="graph-container">
           <canvas id="priceChart"></canvas>
         </div>
