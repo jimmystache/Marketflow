@@ -6,7 +6,8 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "demo:bots": "node ./tools/demo-bots.mjs"
   },
   "prettier": {
     "printWidth": 100,
@@ -30,6 +31,9 @@
     "@angular/router": "^20.3.0",
     "@supabase/supabase-js": "^2.91.0",
     "chart.js": "^4.5.1",
+    "chartjs-adapter-date-fns": "^3.0.0",
+    "chartjs-chart-financial": "^0.2.1",
+    "date-fns": "^4.1.0",
     "ng2-charts": "^8.0.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",

@@ -47,6 +47,42 @@
   flex-direction: column;
 }
 
+.id-strip {
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.id-pill {
+  appearance: none;
+  border: 1px solid rgba(148, 163, 184, 0.8);
+  background: rgba(255, 255, 255, 0.6);
+  color: #334155;
+  border-radius: 999px;
+  padding: 0.125rem 0.45rem;
+  font-size: 0.65rem;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.id-pill:hover {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(51, 65, 85, 0.65);
+}
+
+.id-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.copy-hint {
+  font-size: 0.65rem;
+  color: #16a34a;
+  font-weight: 600;
+}
+
 .market-label {
   font-size: 0.625rem;
   color: #16a34a;
@@ -437,6 +473,79 @@
   letter-spacing: 0.025em;
 }
 
+/* Live Chart */
+.live-chart-card {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #2d3a4f;
+  background: var(--green-50);
+}
+
+.live-chart-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.625rem;
+  color: #6b7280;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.5rem;
+}
+
+.live-chart-last {
+  color: #111827;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.live-chart-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.timeframe-btn {
+  background: transparent;
+  border: 1px solid #d1d5db;
+  color: #6b7280;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.25rem 0.45rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.timeframe-btn:hover {
+  border-color: #16a34a;
+  color: #15803d;
+}
+
+.timeframe-btn.active {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+
+.live-chart-container {
+  position: relative;
+  width: 100%;
+  height: 240px;
+}
+
+.live-chart-container canvas {
+  max-height: 100%;
+}
+
+.chart-empty {
+  padding: 1rem;
+  border-bottom: 1px solid #2d3a4f;
+  background: var(--green-50);
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+
 /* Tab Navigation */
 .tab-nav {
   display: flex;
@@ -483,8 +592,15 @@
   flex: 1;
   overflow: hidden;
   display: flex;
-  max-height: 80vh;
   flex-direction: column;
+}
+
+.orderbook-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
 /* Order Book */
@@ -493,6 +609,37 @@
   grid-template-columns: 1fr 1fr 0.5fr;
   padding: 0.5rem 1rem;
   border-bottom: 1px solid #2d3a4f;
+}
+
+.book-header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.reset-book-btn {
+  background: transparent;
+  border: 1px solid #2d3a4f;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  transition: all 200ms ease;
+}
+
+.reset-book-btn:hover {
+  border-color: #4b5563;
+  color: #111827;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.reset-book-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .book-header span {
@@ -515,20 +662,15 @@
 }
 
 .order-book {
-  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 
 .order-book.asks {
+  justify-content: flex-end;
   border-top: 1px solid #2d3a4f;
-  overflow-y: auto;
-}
-
-.order-book.bids {
-  border-top: 1px solid #2d3a4f;
-  overflow-y: auto;
 }
 
 .book-row {
@@ -646,7 +788,6 @@
 
 .history-list {
   flex: 1;
-  max-height: 78vh;
   overflow-y: auto;
 }
 
@@ -679,8 +820,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  max-height: 78vh;
+  overflow: hidden;
 }
 
 .orders-header {

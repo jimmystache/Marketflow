@@ -81,7 +81,7 @@ card::before, .card::before, .bg-white::before {
 }
 
 card:hover::before, .card:hover::before, .bg-white:hover::before {
-	opacity: 1;
+	opacity: 10%;
 	transform: scale(1.5);
 }
 
