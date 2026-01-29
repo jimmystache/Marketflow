@@ -57,7 +57,7 @@ type ViewState = 'login' | 'environment-select' | 'create-environment' | 'join-e
 @Component({
   selector: 'app-trading',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, BaseChartDirective],
   templateUrl: './trading.html',
   styleUrls: ['./trading.css']
 })
@@ -164,12 +164,77 @@ export class Trading implements OnInit, OnDestroy {
   maxPrice: number = 1000;
   isPlacingOrder: boolean = false;
 
+  isResettingOrderBook: boolean = false;
+
   // Order book
   bids: OrderBookEntry[] = [];
   asks: OrderBookEntry[] = [];
 
   // Trade history
   trades: DbTrade[] = [];
+
+  // Price line chart (built from trades)
+  priceChartData: ChartConfiguration<'line'>['data'] = {
+    datasets: [
+      {
+        label: 'Price',
+        data: [],
+        borderColor: '#16a34a',
+        backgroundColor: 'rgba(22,163,74,0.15)',
+        pointRadius: 0,
+        borderWidth: 2,
+        tension: 0.25
+      }
+    ]
+  };
+
+  priceChartOptions: ChartConfiguration<'line'>['options'] = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    parsing: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        intersect: false,
+        mode: 'index',
+        callbacks: {
+          title: (items) => {
+            const first = items?.[0];
+            const idx = Number((first as any)?.parsed?.x);
+            const ts = this.tradePointTimes[idx];
+            if (!Number.isFinite(idx)) return 'Trade';
+            if (Number.isFinite(ts)) return `Trade #${idx + 1} • ${new Date(ts).toLocaleString()}`;
+            return `Trade #${idx + 1}`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        // Use sequential x-axis so multi-day gaps don't compress labels.
+        type: 'linear',
+        ticks: {
+          autoSkip: true,
+          maxTicksLimit: 6,
+          autoSkipPadding: 16,
+          maxRotation: 0,
+          minRotation: 0,
+          padding: 6,
+          callback: (value) => {
+            const n = typeof value === 'string' ? Number(value) : (value as number);
+            if (!Number.isFinite(n)) return '';
+            return `#${Math.round(n) + 1}`;
+          }
+        }
+      },
+      y: {
+        ticks: { maxTicksLimit: 6 }
+      }
+    }
+  };
+
+  private tradePointTimes: number[] = [];
 
   // My orders
   myOrders: LocalOrder[] = [];
@@ -876,7 +941,70 @@ export class Trading implements OnInit, OnDestroy {
    * Subscribe to real-time updates (legacy - for non-environment trading)
    */
   private subscribeToUpdates(): void {
-    // This is now handled by subscribeToEnvironmentUpdates for environment trading
+    // Subscribe to orders
+    this.supabaseService.subscribeToOrders(this.marketId, (orders) => {
+      this.allOrders = orders;
+      this.updateOrderBook();
+      this.updateMyOrders();
+    });
+
+    // Subscribe to trades
+    this.supabaseService.subscribeToTrades(this.marketId, (trades) => {
+      this.trades = trades;
+      if (trades.length > 0) {
+        this.lastPrice = Number(trades[0].price);
+      }
+
+      this.rebuildPriceSeriesFromTrades();
+    });
+
+    // Subscribe to trader updates
+    this.supabaseService.subscribeToTrader(this.traderId, (trader) => {
+      if (trader) {
+        this.trader = trader;
+        this.cash = Number(trader.cash);
+        this.settledCash = Number(trader.settled_cash);
+        this.availableCash = Number(trader.available_cash);
+      }
+    });
+  }
+
+  private rebuildPriceSeriesFromTrades(): void {
+    if (!this.trades || this.trades.length === 0) {
+      (this.priceChartData.datasets[0] as any).data = [];
+      this.tradePointTimes = [];
+      return;
+    }
+
+    const sorted = [...this.trades].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    const maxPoints = 400;
+    const clipped = sorted.length > maxPoints ? sorted.slice(-maxPoints) : sorted;
+
+    const points: Array<{ x: number; y: number }> = [];
+    const times: number[] = [];
+
+    for (const t of clipped) {
+      const ts = new Date(t.created_at).getTime();
+      const price = Number(t.price);
+      if (!Number.isFinite(price)) continue;
+      times.push(Number.isFinite(ts) ? ts : NaN);
+      points.push({ x: points.length, y: price });
+    }
+
+    this.tradePointTimes = times;
+
+    // Replace dataset to keep change detection happy.
+    this.priceChartData = {
+      datasets: [
+        {
+          ...(this.priceChartData.datasets[0] as any),
+          data: points
+        }
+      ]
+    };
   }
 
   /**
@@ -1196,6 +1324,71 @@ export class Trading implements OnInit, OnDestroy {
     } catch (error) {
       console.error('Error cancelling order:', error);
       alert('Failed to cancel order');
+    }
+  }
+
+  /**
+   * Demo/admin convenience: cancel all open/partial orders in the current market.
+   * Also refunds this trader's reserved cash for any cancelled BUY orders.
+   */
+  async resetOrderBook(): Promise<void> {
+    if (!this.isConnected || !this.marketId) return;
+    if (this.isResettingOrderBook) return;
+
+    const ok = confirm(
+      'Reset order book? This cancels ALL open orders (buys + sells) for everyone in this market.'
+    );
+    if (!ok) return;
+
+    this.isResettingOrderBook = true;
+    try {
+      const refund = this.allOrders
+        .filter(
+          (o) =>
+            o.market_id === this.marketId &&
+            o.trader_id === this.traderId &&
+            o.type === 'buy' &&
+            (o.status === 'open' || o.status === 'partial')
+        )
+        .reduce((sum, o) => sum + Number(o.price) * Math.max(0, o.units - o.filled_units), 0);
+
+      const cancelledCount = await this.supabaseService.cancelOpenOrdersForMarket(this.marketId);
+
+      // Optimistically update local state immediately (realtime will also reconcile).
+      this.allOrders = this.allOrders.map((o) => {
+        if (o.market_id !== this.marketId) return o;
+        if (o.status !== 'open' && o.status !== 'partial') return o;
+        return { ...o, status: 'cancelled', updated_at: new Date().toISOString() };
+      });
+
+      this.myOrders = this.myOrders.map((o) => {
+        if (o.status !== 'open' && o.status !== 'partial') return o;
+        return { ...o, status: 'cancelled' };
+      });
+
+      if (refund > 0) {
+        this.availableCash += refund;
+        await this.supabaseService.updateTraderCash(
+          this.traderId,
+          this.cash,
+          this.settledCash,
+          this.availableCash
+        );
+      }
+
+      this.updateOrderBook();
+
+      if (cancelledCount > 0) {
+        // Keep it simple + visible for demos.
+        alert(`Order book reset: cancelled ${cancelledCount} open orders.`);
+      } else {
+        alert('Order book reset: no open orders to cancel.');
+      }
+    } catch (error) {
+      console.error('Error resetting order book:', error);
+      alert('Failed to reset order book');
+    } finally {
+      this.isResettingOrderBook = false;
     }
   }
 

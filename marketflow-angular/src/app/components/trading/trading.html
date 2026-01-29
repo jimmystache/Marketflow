@@ -611,12 +611,50 @@
 
       <!-- Order Book View -->
       <div class="tab-content" *ngIf="activeTab === 'orderbook'">
+        <!-- Price Chart (built from trades) -->
+        <div class="live-chart-card" *ngIf="trades.length > 0; else waitingForTrades">
+          <div class="live-chart-title">
+            <span>PRICE</span>
+            <div class="live-chart-controls">
+              <span class="live-chart-last" *ngIf="lastPrice !== null">Last: {{ formatCurrency(lastPrice) }}</span>
+            </div>
+          </div>
+
+          <div class="live-chart-container">
+            <canvas
+              baseChart
+              [type]="'line'"
+              [data]="priceChartData"
+              [options]="priceChartOptions"
+            ></canvas>
+          </div>
+        </div>
+
+        <ng-template #waitingForTrades>
+          <div class="chart-empty">
+            Waiting for trades...
+          </div>
+        </ng-template>
+
         <!-- Column Headers -->
         <div class="book-header">
           <span class="col-units">UNITS</span>
           <span class="col-price">PRICE</span>
-          <span class="col-mine">MINE</span>
+          <span class="col-mine book-header-right">
+            <span>MINE</span>
+            <button
+              class="reset-book-btn"
+              type="button"
+              (click)="resetOrderBook()"
+              [disabled]="isResettingOrderBook"
+              title="Cancel all open orders (demo reset)"
+            >
+              {{ isResettingOrderBook ? 'RESETTING…' : 'RESET' }}
+            </button>
+          </span>
         </div>
+
+        <div class="orderbook-scroll">
 
         <!-- Asks (Sell Orders) - Displayed in reverse so lowest is at bottom -->
         <div class="order-book asks">
@@ -655,6 +693,8 @@
             <div class="depth-bar bid-bar" [style.width.%]="(bid.units / 20) * 100"></div>
           </div>
           <div *ngIf="bids.length === 0" class="empty-book">No buy orders</div>
+        </div>
+
         </div>
       </div>
 

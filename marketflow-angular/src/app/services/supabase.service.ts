@@ -451,6 +451,26 @@ export class SupabaseService {
     return this.updateOrder(orderId, { status: 'cancelled' });
   }
 
+  /**
+   * Cancel all open/partial orders for a market (admin/demo reset)
+   * Returns the number of orders updated.
+   */
+  async cancelOpenOrdersForMarket(marketId: string): Promise<number> {
+    const { data, error } = await this.supabase
+      .from('orders')
+      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('market_id', marketId)
+      .in('status', ['open', 'partial'])
+      .select('id');
+
+    if (error) {
+      console.error('Error cancelling open orders for market:', error);
+      return 0;
+    }
+
+    return data?.length ?? 0;
+  }
+
   // ==================== TRADE OPERATIONS ====================
 
   /**
