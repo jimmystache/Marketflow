@@ -224,7 +224,16 @@ export class SupabaseService {
   constructor() {
     this.supabase = createClient(
       environment.supabase.url,
-      environment.supabase.anonKey
+      environment.supabase.anonKey,
+      {
+        auth: {
+          // Disable lock to prevent NavigatorLockAcquireTimeoutError
+          lock: undefined,
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: false
+        }
+      }
     );
   }
 
