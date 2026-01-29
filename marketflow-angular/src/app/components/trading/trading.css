@@ -483,7 +483,6 @@
   flex: 1;
   overflow: hidden;
   display: flex;
-  max-height: 80vh;
   flex-direction: column;
 }
 
@@ -522,13 +521,8 @@
 }
 
 .order-book.asks {
+  justify-content: flex-end;
   border-top: 1px solid #2d3a4f;
-  overflow-y: auto;
-}
-
-.order-book.bids {
-  border-top: 1px solid #2d3a4f;
-  overflow-y: auto;
 }
 
 .book-row {
@@ -646,7 +640,6 @@
 
 .history-list {
   flex: 1;
-  max-height: 78vh;
   overflow-y: auto;
 }
 
@@ -679,8 +672,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  max-height: 78vh;
+  overflow: hidden;
 }
 
 .orders-header {
