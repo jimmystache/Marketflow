@@ -2,11 +2,12 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
 import { AuthService } from './services/auth.service';
+import { ChatAssistant } from './components/chat-assistant/chat-assistant';
 import { filter } from 'rxjs/operators';
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, RouterOutlet],
+  imports: [CommonModule, RouterOutlet, ChatAssistant],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })

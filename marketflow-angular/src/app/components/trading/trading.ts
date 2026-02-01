@@ -19,6 +19,7 @@ import {
   CreateEnvironmentInput,
   CreateStockInput,
 } from '../../services/supabase.service';
+import { TradingContextService } from '../../services/trading-context.service';
 import { Chart, registerables } from 'chart.js';
 import { BaseChartDirective } from 'ng2-charts';
 import {
@@ -307,6 +308,7 @@ export class Trading implements OnInit, OnDestroy {
   constructor(
     private router: Router,
     private supabaseService: SupabaseService,
+    private tradingContextService: TradingContextService,
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -661,6 +663,13 @@ export class Trading implements OnInit, OnDestroy {
       this.environmentId = this.currentEnvironment.id;
       this.isPaused = this.currentEnvironment.is_paused;
 
+      // Update trading context
+      this.tradingContextService.setContext({
+        environmentId: this.environmentId,
+        participantId: this.participantId,
+        stockId: null // Will be set when stock is selected
+      });
+
       // Check if user is creator (admin)
       if (this.currentEnvironment.creator_id === this.traderId) {
         this.isAdmin = true;
@@ -722,6 +731,7 @@ export class Trading implements OnInit, OnDestroy {
 
     // Load positions
     this.environmentPositions = await this.supabaseService.getParticipantPositions(
+      this.environmentId,
       this.participantId,
     );
 
@@ -743,6 +753,11 @@ export class Trading implements OnInit, OnDestroy {
     this.selectedStock = stock;
     this.selectedStockId = stock.id;
     this.symbol = stock.symbol;
+
+    // Update trading context
+    this.tradingContextService.setContext({
+      stockId: this.selectedStockId
+    });
 
     // Update position
     this.updateCurrentPosition();
@@ -1004,6 +1019,10 @@ export class Trading implements OnInit, OnDestroy {
     this.asks = [];
     this.trades = [];
     this.myOrders = [];
+    
+    // Clear trading context
+    this.tradingContextService.clearContext();
+    
     this.loadEnvironments();
     this.currentView = 'environment-select';
   }
