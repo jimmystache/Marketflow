@@ -426,6 +426,7 @@ Common options:
   console.log(`Demo bots running for environment ${market.symbol} (${market.id})`);
   console.log(`- stock=${stock.symbol} (${stock.id})`);
   console.log(`- bots=${bots} intervalMs=${intervalMs} durationSec=${durationSec || '∞'}`);
+  console.log(`- volatility mode: ${volatilityMode} (${baseVolatility.toFixed(2)})`);
   console.log('Press Ctrl+C to stop.');
 
   let mid = basePrice;

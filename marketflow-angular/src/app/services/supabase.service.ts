@@ -1141,6 +1141,73 @@ export class SupabaseService {
   }
 
   /**
+   * Get or create participant (for bot simulations)
+   */
+  async getOrCreateParticipant(environmentId: string, traderId: string, startingCash: number): Promise<DbEnvironmentParticipant | null> {
+    const { data: existing } = await this.supabase
+      .from('environment_participants')
+      .select('*')
+      .eq('market_id', environmentId)
+      .eq('trader_id', traderId)
+      .single();
+
+    if (existing) return existing;
+
+    const { data, error } = await this.supabase
+      .from('environment_participants')
+      .insert({
+        market_id: environmentId,
+        trader_id: traderId,
+        cash: startingCash,
+        settled_cash: startingCash,
+        available_cash: startingCash,
+        is_admin: false
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating participant:', error);
+      return null;
+    }
+
+    return data;
+  }
+
+  /**
+   * Get or create environment position (for bot simulations)
+   */
+  async getOrCreateEnvironmentPosition(environmentId: string, participantId: string, stockId: string, startingUnits: number): Promise<DbEnvironmentPosition | null> {
+    const { data: existing } = await this.supabase
+      .from('environment_positions')
+      .select('*')
+      .eq('participant_id', participantId)
+      .eq('stock_id', stockId)
+      .single();
+
+    if (existing) return existing;
+
+    const { data, error } = await this.supabase
+      .from('environment_positions')
+      .insert({
+        market_id: environmentId,
+        participant_id: participantId,
+        stock_id: stockId,
+        units: startingUnits,
+        avg_price: 0
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating position:', error);
+      return null;
+    }
+
+    return data;
+  }
+
+  /**
    * Get stocks in an environment
    */
   async getEnvironmentStocks(environmentId: string): Promise<DbEnvironmentStock[]> {

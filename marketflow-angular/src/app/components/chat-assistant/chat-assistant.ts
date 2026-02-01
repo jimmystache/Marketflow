@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ElementRef, Renderer2 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
@@ -12,6 +12,7 @@ import {
 } from '../../services/supabase.service';
 import { TradingContextService } from '../../services/trading-context.service';
 import { OrderExecutionService } from '../../services/order-execution.service';
+import { BotSimulationService } from '../../services/bot-simulation.service';
 
 interface ChatMessage {
   id: string;
@@ -35,6 +36,7 @@ interface PendingOrder {
 })
 export class ChatAssistant implements OnInit, OnDestroy {
   isExpanded = false;
+  private globalClickUnlisten: (() => void) | null = null;
   messages: ChatMessage[] = [];
   userInput = '';
   
@@ -49,15 +51,20 @@ export class ChatAssistant implements OnInit, OnDestroy {
   // Pending order waiting confirmation
   pendingOrder: PendingOrder | null = null;
   
+  // Bot simulation state
+  botSimulationRunning = false;
+  
   // Subscription to trading context
   private contextSubscription?: Subscription;
 
   constructor(
     private supabaseService: SupabaseService,
     private tradingContextService: TradingContextService,
-    private orderExecutionService: OrderExecutionService
-  ) {
-  }
+    private orderExecutionService: OrderExecutionService,
+    private elRef: ElementRef,
+    private renderer: Renderer2,
+    private botSimulationService: BotSimulationService
+  ) {}
 
 
   ngOnInit(): void {
@@ -67,7 +74,8 @@ export class ChatAssistant implements OnInit, OnDestroy {
 - sell 5 at bid
 - what's my position?
 - show environment info
-- what are my stats?`;
+- what are my stats?
+- run bot simulation (high/extreme) for 30 seconds`;
     this.addMessage(welcome, 'assistant');
     
     // Subscribe to trading context changes
@@ -93,6 +101,12 @@ export class ChatAssistant implements OnInit, OnDestroy {
     if (this.contextSubscription) {
       this.contextSubscription.unsubscribe();
     }
+    if (this.globalClickUnlisten) {
+      this.globalClickUnlisten();
+      this.globalClickUnlisten = null;
+    }
+    // Stop any running bot simulation
+    this.botSimulationService.stopSimulation();
   }
   
   /**
@@ -125,7 +139,31 @@ export class ChatAssistant implements OnInit, OnDestroy {
    * Toggle chat expansion
    */
   toggleChat(): void {
-    this.isExpanded = !this.isExpanded;
+    if (this.isExpanded) {
+      this.closeChat();
+    } else {
+      this.openChat();
+    }
+  }
+
+  openChat(): void {
+    this.isExpanded = true;
+    // Listen for clicks outside
+    if (!this.globalClickUnlisten) {
+      this.globalClickUnlisten = this.renderer.listen('document', 'mousedown', (event: MouseEvent) => {
+        if (this.isExpanded && !this.elRef.nativeElement.contains(event.target)) {
+          this.closeChat();
+        }
+      });
+    }
+  }
+
+  closeChat(): void {
+    this.isExpanded = false;
+    if (this.globalClickUnlisten) {
+      this.globalClickUnlisten();
+      this.globalClickUnlisten = null;
+    }
   }
 
   /**
@@ -248,6 +286,12 @@ export class ChatAssistant implements OnInit, OnDestroy {
 
       if (lower.includes('help')) {
         this.showHelp();
+        return;
+      }
+
+      // Bot simulation commands
+      if (lower.includes('bot') && (lower.includes('sim') || lower.includes('run'))) {
+        await this.handleBotSimulation(input);
         return;
       }
 
@@ -606,17 +650,16 @@ export class ChatAssistant implements OnInit, OnDestroy {
       : '⚠️ Context not detected. Use "set" commands or navigate to trading page.\n\n';
     
     this.addMessage(
-      '🤖 Available Commands:\n\n' +
-      contextNote +
-      'Context (manual override):\n' +
-      '• set environment [id]\n' +
-      '• set participant [id]\n' +
-      '• set stock [id]\n\n' +
+      '🤖 Available Commands:\n' +
       'Trading:\n' +
       '• buy [quantity] at $[price]\n' +
       '• buy [quantity] at ask\n' +
       '• sell [quantity] at $[price]\n' +
       '• sell [quantity] at bid\n\n' +
+      'Bot Simulations:\n' +
+      '• run bot simulation high for 30 seconds\n' +
+      '• run bot simulation extreme for 2 minutes\n' +
+      '• Or use quick action buttons above\n\n' +
       'Information:\n' +
       '• show environment info\n' +
       '• what\'s my position?\n' +
@@ -625,6 +668,121 @@ export class ChatAssistant implements OnInit, OnDestroy {
       '• show recent trades',
       'assistant'
     );
+  }
+
+  /**
+   * Handle bot simulation command
+   */
+  async handleBotSimulation(input: string): Promise<void> {
+    if (!this.validateContext()) return;
+
+    const lower = input.toLowerCase();
+    let volatility: 'high' | 'extreme' = 'high';
+    let duration = 30; // default 30 seconds
+
+    // Parse volatility
+    if (lower.includes('extreme')) {
+      volatility = 'extreme';
+    } else if (lower.includes('high')) {
+      volatility = 'high';
+    }
+
+    // Parse duration
+    const durationMatch = input.match(/(\d+)\s*(sec|second|min|minute)/i);
+    if (durationMatch) {
+      const value = parseInt(durationMatch[1]);
+      const unit = durationMatch[2].toLowerCase();
+      if (unit.startsWith('min')) {
+        duration = value * 60;
+      } else {
+        duration = value;
+      }
+    }
+
+    await this.runBotSimulation(volatility, duration);
+  }
+
+  /**
+   * Run bot simulation with specified volatility and duration
+   */
+  async runBotSimulation(volatility: 'high' | 'extreme', duration: number): Promise<void> {
+    if (this.botSimulationRunning) {
+      this.addMessage('❌ Bot simulation is already running. Please wait for it to complete.', 'assistant');
+      return;
+    }
+
+    if (!this.currentEnvironment || !this.currentStock) {
+      this.addMessage('❌ Missing environment or stock context', 'assistant');
+      return;
+    }
+
+    this.botSimulationRunning = true;
+    const volatilityLabel = volatility === 'extreme' ? '🔥 EXTREME' : '⚡ HIGH';
+    this.addMessage(
+      `🤖 Starting bot simulation...\n${volatilityLabel} volatility for ${duration} seconds\nEnvironment: ${this.currentEnvironment.name}\nStock: ${this.currentStock.symbol}`,
+      'assistant'
+    );
+
+    try {
+      // Call the demo-bots script via a backend endpoint or execute directly
+      // For now, we'll simulate the command being run
+      const result = await this.executeBotScript(volatility, duration);
+      
+      this.addMessage(
+        `✅ Bot simulation ${result.success ? 'started successfully' : 'failed'}\n${result.message}`,
+        'assistant'
+      );
+    } catch (error: any) {
+      this.addMessage(`❌ Failed to start bot simulation: ${error.message}`, 'assistant');
+    } finally {
+      // Reset after duration
+      setTimeout(() => {
+        this.botSimulationRunning = false;
+        this.addMessage('🤖 Bot simulation completed', 'assistant');
+      }, duration * 1000);
+    }
+  }
+
+  /**
+   * Execute bot simulation directly in the browser
+   */
+  private async executeBotScript(volatility: 'high' | 'extreme', duration: number): Promise<{ success: boolean; message: string }> {
+    if (!this.currentEnvironment || !this.currentStock) {
+      return { success: false, message: 'Missing environment or stock context' };
+    }
+
+    try {
+      // Start the bot simulation service
+      const result = await this.botSimulationService.startSimulation(
+        this.currentEnvironment.id,
+        this.currentStock.id,
+        volatility,
+        duration,
+        5 // 5 bots
+      );
+
+      return result;
+    } catch (err: any) {
+      console.error('Unexpected error:', err);
+      return {
+        success: false,
+        message: `Unexpected error: ${err.message || 'Unknown error'}`
+      };
+    }
+  }
+
+  /**
+   * Quick action: Run high volatility bot simulation
+   */
+  async quickActionHighVolatility(): Promise<void> {
+    await this.runBotSimulation('high', 30);
+  }
+
+  /**
+   * Quick action: Run extreme volatility bot simulation
+   */
+  async quickActionExtremeVolatility(): Promise<void> {
+    await this.runBotSimulation('extreme', 30);
   }
 
   /**

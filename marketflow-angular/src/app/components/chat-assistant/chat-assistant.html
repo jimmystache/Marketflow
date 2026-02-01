@@ -24,6 +24,26 @@
       <button class="close-button" (click)="toggleChat()">×</button>
     </div>
 
+    <!-- Quick Actions -->
+    <div class="quick-actions" *ngIf="currentEnvironment && currentStock">
+      <button 
+        class="quick-action-btn high-volatility"
+        (click)="quickActionHighVolatility()"
+        [disabled]="botSimulationRunning"
+        title="Run 30-second high volatility bot simulation">
+        <span class="icon">⚡</span>
+        <span class="label">High Vol</span>
+      </button>
+      <button 
+        class="quick-action-btn extreme-volatility"
+        (click)="quickActionExtremeVolatility()"
+        [disabled]="botSimulationRunning"
+        title="Run 30-second extreme volatility bot simulation">
+        <span class="icon">🔥</span>
+        <span class="label">Extreme Vol</span>
+      </button>
+    </div>
+
     <!-- Context Info -->
     <div class="chat-context" *ngIf="currentEnvironment || currentParticipant || currentStock">
       <div class="context-item" *ngIf="currentEnvironment">
