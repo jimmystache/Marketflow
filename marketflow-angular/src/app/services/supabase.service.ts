@@ -1337,6 +1337,24 @@ export class SupabaseService {
   }
 
   /**
+   * Get a single order by ID (used for reloading fresh state during trade matching)
+   */
+  async getEnvironmentOrderById(orderId: string): Promise<DbEnvironmentOrder | null> {
+    const { data, error } = await this.supabase
+      .from('environment_orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching order by ID:', error);
+      return null;
+    }
+
+    return data;
+  }
+
+  /**
    * Get participant orders
    */
   async getParticipantOrders(participantId: string, stockId: string): Promise<DbEnvironmentOrder[]> {

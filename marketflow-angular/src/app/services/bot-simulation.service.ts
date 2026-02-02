@@ -27,7 +27,7 @@ export class BotSimulationService {
   private bots: BotState[] = [];
   private currentMid = 100; // Starting mid price
   private volatility = 0.25;
-  private spread = 0.15;
+  private spread = 0.25;
 
   constructor(private supabaseService: SupabaseService) {}
 
@@ -46,8 +46,8 @@ export class BotSimulationService {
     }
 
     // Set volatility level
-    this.volatility = volatility === 'extreme' ? 0.95 : volatility === 'high' ? 0.55 : 0.25;
-    this.spread = 0.15;
+    this.volatility = volatility === 'extreme' ? 3.00 : volatility === 'high' ? 0.65 : 0.25;
+    this.spread = 0.50;
 
     try {
       // Initialize bots

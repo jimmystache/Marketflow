@@ -213,10 +213,14 @@ export class OrderExecutionService {
         );
 
       for (const ask of matchingAsks) {
-        const incomingRemaining = incomingOrder.units - incomingOrder.filled_units;
+        // Reload incoming order to get fresh filled_units
+        const freshIncoming = await this.supabaseService.getEnvironmentOrderById(incomingOrder.id);
+        if (!freshIncoming) break;
+        
+        const incomingRemaining = freshIncoming.units - freshIncoming.filled_units;
         if (incomingRemaining <= 0) break;
         
-        const executed = await this.executeTrade(incomingOrder, ask);
+        const executed = await this.executeTrade(freshIncoming, ask);
         if (executed) tradesExecuted++;
       }
     } else {
@@ -237,10 +241,14 @@ export class OrderExecutionService {
         );
 
       for (const bid of matchingBids) {
-        const incomingRemaining = incomingOrder.units - incomingOrder.filled_units;
+        // Reload incoming order to get fresh filled_units
+        const freshIncoming = await this.supabaseService.getEnvironmentOrderById(incomingOrder.id);
+        if (!freshIncoming) break;
+        
+        const incomingRemaining = freshIncoming.units - freshIncoming.filled_units;
         if (incomingRemaining <= 0) break;
         
-        const executed = await this.executeTrade(bid, incomingOrder);
+        const executed = await this.executeTrade(bid, freshIncoming);
         if (executed) tradesExecuted++;
       }
     }
@@ -255,63 +263,78 @@ export class OrderExecutionService {
     buyOrder: DbEnvironmentOrder,
     sellOrder: DbEnvironmentOrder
   ): Promise<boolean> {
-    const buyRemaining = buyOrder.units - buyOrder.filled_units;
-    const sellRemaining = sellOrder.units - sellOrder.filled_units;
+    // CRITICAL: Reload orders from DB to get fresh filled_units state
+    // This prevents duplicate trades when matching multiple orders
+    const freshBuyOrder = await this.supabaseService.getEnvironmentOrderById(buyOrder.id);
+    const freshSellOrder = await this.supabaseService.getEnvironmentOrderById(sellOrder.id);
+    
+    if (!freshBuyOrder || !freshSellOrder) {
+      console.error('Could not reload orders for trade execution');
+      return false;
+    }
+    
+    // Check if either order is already filled
+    if (freshBuyOrder.status === 'filled' || freshSellOrder.status === 'filled') {
+      return false;
+    }
+    
+    const buyRemaining = freshBuyOrder.units - freshBuyOrder.filled_units;
+    const sellRemaining = freshSellOrder.units - freshSellOrder.filled_units;
     const tradeUnits = Math.min(buyRemaining, sellRemaining);
-    const tradePrice = Number(sellOrder.price);
+    const tradePrice = Number(freshSellOrder.price);
 
     if (tradeUnits <= 0) return false;
 
     try {
       // Record the trade
       await this.supabaseService.recordEnvironmentTrade({
-        market_id: buyOrder.market_id,
-        stock_id: buyOrder.stock_id,
-        buy_order_id: buyOrder.id,
-        sell_order_id: sellOrder.id,
-        buyer_participant_id: buyOrder.participant_id,
-        seller_participant_id: sellOrder.participant_id,
+        market_id: freshBuyOrder.market_id,
+        stock_id: freshBuyOrder.stock_id,
+        buy_order_id: freshBuyOrder.id,
+        sell_order_id: freshSellOrder.id,
+        buyer_participant_id: freshBuyOrder.participant_id,
+        seller_participant_id: freshSellOrder.participant_id,
         price: tradePrice,
         units: tradeUnits,
       });
 
       // Update buy order
-      const newBuyFilled = buyOrder.filled_units + tradeUnits;
-      const buyStatus = newBuyFilled >= buyOrder.units ? 'filled' : 'partial';
-      await this.supabaseService.updateEnvironmentOrder(buyOrder.id, {
+      const newBuyFilled = freshBuyOrder.filled_units + tradeUnits;
+      const buyStatus = newBuyFilled >= freshBuyOrder.units ? 'filled' : 'partial';
+      await this.supabaseService.updateEnvironmentOrder(freshBuyOrder.id, {
         filled_units: newBuyFilled,
         status: buyStatus,
       });
 
       // Update sell order
-      const newSellFilled = sellOrder.filled_units + tradeUnits;
-      const sellStatus = newSellFilled >= sellOrder.units ? 'filled' : 'partial';
-      await this.supabaseService.updateEnvironmentOrder(sellOrder.id, {
+      const newSellFilled = freshSellOrder.filled_units + tradeUnits;
+      const sellStatus = newSellFilled >= freshSellOrder.units ? 'filled' : 'partial';
+      await this.supabaseService.updateEnvironmentOrder(freshSellOrder.id, {
         filled_units: newSellFilled,
         status: sellStatus,
       });
 
       // Update buyer position and cash
       await this.updateParticipantAfterTrade(
-        buyOrder.participant_id,
-        buyOrder.stock_id,
-        buyOrder.market_id,
+        freshBuyOrder.participant_id,
+        freshBuyOrder.stock_id,
+        freshBuyOrder.market_id,
         'buy',
         tradePrice,
         tradeUnits,
-        Number(buyOrder.price),
+        Number(freshBuyOrder.price),
         buyStatus
       );
 
       // Update seller position and cash
       await this.updateParticipantAfterTrade(
-        sellOrder.participant_id,
-        sellOrder.stock_id,
-        sellOrder.market_id,
+        freshSellOrder.participant_id,
+        freshSellOrder.stock_id,
+        freshSellOrder.market_id,
         'sell',
         tradePrice,
         tradeUnits,
-        Number(sellOrder.price),
+        Number(freshSellOrder.price),
         sellStatus
       );
 

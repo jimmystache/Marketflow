@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ElementRef, Renderer2 } from '@angular/core';
-import { CommonModule ,NgClass} from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { 
@@ -60,6 +60,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
   
   // Bot simulation state
   botSimulationRunning = false;
+  private botSimulationTimeout: any = null;
   
   // Order execution state
   isExecutingOrder = false;
@@ -167,6 +168,8 @@ Switch modes using the toggle above. Try:
         }
       });
     }
+    // Ensure latest messages are visible after opening (DOM created)
+    setTimeout(() => this.scrollToBottom(), 100);
   }
 
   closeChat(): void {
@@ -197,12 +200,22 @@ Switch modes using the toggle above. Try:
     });
     
     // Auto-scroll to bottom
-    setTimeout(() => {
-      const chatBody = document.querySelector('.chat-body');
+    setTimeout(() => this.scrollToBottom(), 50);
+  }
+
+  /**
+   * Scroll chat body to the bottom (latest messages)
+   */
+  private scrollToBottom(): void {
+    try {
+      const host = this.elRef && this.elRef.nativeElement ? this.elRef.nativeElement : document;
+      const chatBody = host.querySelector?.('.chat-body') ?? document.querySelector('.chat-body');
       if (chatBody) {
         chatBody.scrollTop = chatBody.scrollHeight;
       }
-    }, 50);
+    } catch (e) {
+      // ignore
+    }
   }
 
   /**
@@ -964,10 +977,17 @@ Switch modes using the toggle above. Try:
     } catch (error: any) {
       this.addMessage(`❌ Failed to start bot simulation: ${error.message}`, 'assistant');
     } finally {
-      // Reset after duration
-      setTimeout(() => {
-        this.botSimulationRunning = false;
-        this.addMessage('🤖 Bot simulation completed', 'assistant');
+      // Reset after duration, but only if not stopped
+      if (this.botSimulationTimeout) {
+        clearTimeout(this.botSimulationTimeout);
+        this.botSimulationTimeout = null;
+      }
+      this.botSimulationTimeout = setTimeout(() => {
+        if (this.botSimulationRunning) {
+          this.botSimulationRunning = false;
+          this.addMessage('🤖 Bot simulation completed', 'assistant');
+        }
+        this.botSimulationTimeout = null;
       }, duration * 1000);
     }
   }
@@ -1027,6 +1047,10 @@ Switch modes using the toggle above. Try:
   stopSimulation(): void {
     this.botSimulationService.stopSimulation();
     this.botSimulationRunning = false;
+    if (this.botSimulationTimeout) {
+      clearTimeout(this.botSimulationTimeout);
+      this.botSimulationTimeout = null;
+    }
     this.addMessage('🛑 Bot simulation stopped', 'assistant');
   }
 

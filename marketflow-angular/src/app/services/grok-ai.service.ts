@@ -42,7 +42,7 @@ export interface GrokAnalysisResponse {
   providedIn: 'root'
 })
 export class GrokAiService {
-  private readonly grokApiUrl = environment.grokApiUrl || 'https://api.x.ai/v1/chat/completions';
+  private readonly grokApiUrl = environment.grokApiUrl || 'https://api.groq.com/openai/v1/chat/completions';
   private readonly grokApiKey = environment.grokApiKey || '';
 
   constructor(private http: HttpClient) {}
