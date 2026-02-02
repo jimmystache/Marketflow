@@ -108,7 +108,7 @@
 .mode-toggle {
   display: flex;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 10px 12px;
   background: #f5f7fa;
   border-bottom: 1px solid #e1e8ed;
 }
@@ -119,12 +119,12 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 6px 10px;
   background: white;
   border: 2px solid #e1e8ed;
   border-radius: 8px;
   color: #657786;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -144,7 +144,173 @@
 }
 
 .mode-btn .icon {
+  font-size: 14px;
+}
+
+/* Menu Toggle Button */
+.menu-toggle-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 2px solid #e1e8ed;
+  border-radius: 8px;
+  color: #657786;
   font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.menu-toggle-btn:hover {
+  border-color: #667eea;
+  color: #667eea;
+  background: #f9f9ff;
+}
+
+.menu-toggle-btn.active {
+  background: #667eea;
+  border-color: #667eea;
+  color: white;
+}
+
+/* Extended Menu */
+.extended-menu {
+  background: #f8f9fa;
+  border-bottom: 1px solid #e1e8ed;
+  padding: 12px;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.menu-section {
+  margin-bottom: 12px;
+}
+
+.menu-section:last-child {
+  margin-bottom: 0;
+}
+
+.menu-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.context-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 4px 0;
+}
+
+.context-row .context-label {
+  color: #888;
+  font-weight: 500;
+}
+
+.context-row .context-value {
+  color: #333;
+  font-family: monospace;
+  font-size: 11px;
+  background: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #e1e8ed;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.simulation-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.sim-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sim-btn .icon {
+  font-size: 12px;
+}
+
+.sim-btn.normal {
+  background: #e8eaed;
+  color: #5f6368;
+}
+
+.sim-btn.normal:hover:not(:disabled) {
+  background: #d2d5d9;
+}
+
+.sim-btn.high {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.sim-btn.high:hover:not(:disabled) {
+  background: #ffe69c;
+}
+
+.sim-btn.extreme {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.sim-btn.extreme:hover:not(:disabled) {
+  background: #f1b0b7;
+}
+
+.sim-btn.stop {
+  background: #dc3545;
+  color: white;
+}
+
+.sim-btn.stop:hover {
+  background: #c82333;
+}
+
+.sim-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.no-context {
+  font-size: 12px;
+  color: #888;
+  text-align: center;
+  padding: 8px;
+  background: white;
+  border-radius: 6px;
+  border: 1px dashed #ddd;
 }
 
 /* Quick Actions */
@@ -451,6 +617,17 @@
   border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.confirm-button:hover:not(:disabled) {
+  background: #27ae60;
+}
+
+.confirm-button:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .cancel-button {
@@ -461,6 +638,36 @@
   border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.cancel-button:hover:not(:disabled) {
+  background: #e74c3c;
+}
+
+.cancel-button:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.executing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #667eea;
+  font-weight: 600;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* Responsive */

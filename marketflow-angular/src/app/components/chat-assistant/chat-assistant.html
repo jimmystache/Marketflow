@@ -40,44 +40,57 @@
         <span class="icon">🧠</span>
         <span>Analysis</span>
       </button>
+      <!-- Menu Toggle Button -->
+      <button 
+        class="menu-toggle-btn" 
+        (click)="toggleMenu()"
+        [class.active]="menuOpen"
+        title="Options">
+        <span class="icon">{{ menuOpen ? '✕' : '☰' }}</span>
+      </button>
     </div>
 
-    <!-- Quick Actions (Command Mode Only) -->
-    <div class="quick-actions" *ngIf="currentMode === 'command' && currentEnvironment && currentStock">
-      <div class="quick-actions-label">Simulation:</div>
-      <div class="quick-actions-buttons">
-        <button class="quick-action-btn normal-volatility" (click)="quickActionNormalVolatility()" [disabled]="botSimulationRunning" title="Run 30-second normal volatility bot simulation">
-          <span class="icon">⚪</span>
-          <span class="label">Normal</span>
-        </button>
-        <button class="quick-action-btn high-volatility" (click)="quickActionHighVolatility()" [disabled]="botSimulationRunning" title="Run 30-second high volatility bot simulation">
-          <span class="icon">⚡</span>
-          <span class="label">High</span>
-        </button>
-        <button class="quick-action-btn extreme-volatility" (click)="quickActionExtremeVolatility()" [disabled]="botSimulationRunning" title="Run 30-second extreme volatility bot simulation">
-          <span class="icon">🔥</span>
-          <span class="label">Extreme</span>
-        </button>
-        <button class="quick-action-btn stop-simulation" (click)="stopSimulation()" *ngIf="botSimulationRunning" title="Stop bot simulation">
-          <span class="icon">⏹️</span>
-          <span class="label">Stop</span>
-        </button>
+    <!-- Collapsible Menu -->
+    <div class="extended-menu" *ngIf="menuOpen">
+      <!-- Context Info -->
+      <div class="menu-section" *ngIf="currentEnvironment || currentParticipant || currentStock">
+        <div class="menu-section-title">Context</div>
+        <div class="context-row" *ngIf="currentEnvironment">
+          <span class="context-label">Env:</span>
+          <span class="context-value">{{currentEnvironment.name || currentEnvironment.id}}</span>
+        </div>
+        <div class="context-row" *ngIf="currentParticipant">
+          <span class="context-label">User:</span>
+          <span class="context-value">{{currentParticipant.trader?.username || 'Unknown'}}</span>
+        </div>
+        <div class="context-row" *ngIf="currentStock">
+          <span class="context-label">Stock:</span>
+          <span class="context-value">{{currentStock.symbol}}</span>
+        </div>
       </div>
-    </div>
 
-    <!-- Context Info -->
-    <div class="chat-context" *ngIf="currentEnvironment || currentParticipant || currentStock">
-      <div class="context-item" *ngIf="currentEnvironment">
-        <span class="context-label">Env:</span>
-        <span class="context-value">{{currentEnvironment.id}}</span>
+      <!-- Simulation Options (Command Mode Only) -->
+      <div class="menu-section" *ngIf="currentMode === 'command' && currentEnvironment && currentStock">
+        <div class="menu-section-title">Bot Simulation</div>
+        <div class="simulation-buttons">
+          <button class="sim-btn normal" (click)="quickActionNormalVolatility(); toggleMenu()" [disabled]="botSimulationRunning">
+            <span class="icon">⚪</span> Normal
+          </button>
+          <button class="sim-btn high" (click)="quickActionHighVolatility(); toggleMenu()" [disabled]="botSimulationRunning">
+            <span class="icon">⚡</span> High
+          </button>
+          <button class="sim-btn extreme" (click)="quickActionExtremeVolatility(); toggleMenu()" [disabled]="botSimulationRunning">
+            <span class="icon">🔥</span> Extreme
+          </button>
+          <button class="sim-btn stop" *ngIf="botSimulationRunning" (click)="stopSimulation(); toggleMenu()">
+            <span class="icon">⏹️</span> Stop
+          </button>
+        </div>
       </div>
-      <div class="context-item" *ngIf="currentParticipant">
-        <span class="context-label">User:</span>
-        <span class="context-value">{{currentParticipant.trader?.username || 'Unknown'}}</span>
-      </div>
-      <div class="context-item" *ngIf="currentStock">
-        <span class="context-label">Stock:</span>
-        <span class="context-value">{{currentStock.symbol}}</span>
+
+      <!-- No Context Message -->
+      <div class="menu-section" *ngIf="!currentEnvironment && !currentStock">
+        <div class="no-context">Navigate to the trading page to enable simulations</div>
       </div>
     </div>
 
@@ -93,14 +106,30 @@
       </div>
     </div>
     <!-- Pending Order Confirmation -->
-    <div class="pending-order" *ngIf="pendingOrder">
-      <div class="pending-summary">
+    <div class="pending-order" *ngIf="pendingOrder || isExecutingOrder">
+      <div class="pending-summary" *ngIf="pendingOrder">
         <strong>{{pendingOrder.type | titlecase}}</strong>
         : {{pendingOrder.units}} @ ${{pendingOrder.price.toFixed(2)}}
       </div>
-      <div class="pending-actions">
-        <button class="confirm-button" (click)="confirmPending()">Confirm</button>
-        <button class="cancel-button" (click)="cancelPending()">Cancel</button>
+      <div class="pending-summary" *ngIf="isExecutingOrder && !pendingOrder">
+        <strong>Executing order...</strong>
+      </div>
+      <div class="pending-actions" *ngIf="!isExecutingOrder">
+        <button 
+          class="confirm-button" 
+          (click)="confirmPending()" 
+          [disabled]="isExecutingOrder">
+          Confirm
+        </button>
+        <button 
+          class="cancel-button" 
+          (click)="cancelPending()" 
+          [disabled]="isExecutingOrder">
+          Cancel
+        </button>
+      </div>
+      <div class="pending-actions" *ngIf="isExecutingOrder">
+        <div class="executing-indicator">Processing...</div>
       </div>
     </div>
 

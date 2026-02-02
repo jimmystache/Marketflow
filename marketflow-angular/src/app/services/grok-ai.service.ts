@@ -69,7 +69,7 @@ export class GrokAiService {
       });
 
       const body = {
-        model: 'grok-beta',
+        model: 'openai/gpt-oss-20b',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }

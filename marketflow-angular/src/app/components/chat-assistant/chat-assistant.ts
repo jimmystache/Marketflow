@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ElementRef, Renderer2 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule ,NgClass} from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { 
@@ -44,6 +44,9 @@ export class ChatAssistant implements OnInit, OnDestroy {
   // Mode: command or analysis
   currentMode: 'command' | 'analysis' = 'command';
   
+  // Menu state
+  menuOpen = false;
+  
   // Current environment context
   currentEnvironment: DbTradingEnvironment | null = null;
   currentParticipant: DbEnvironmentParticipant | null = null;
@@ -57,6 +60,9 @@ export class ChatAssistant implements OnInit, OnDestroy {
   
   // Bot simulation state
   botSimulationRunning = false;
+  
+  // Order execution state
+  isExecutingOrder = false;
   
   // Subscription to trading context
   private contextSubscription?: Subscription;
@@ -165,10 +171,18 @@ Switch modes using the toggle above. Try:
 
   closeChat(): void {
     this.isExpanded = false;
+    this.menuOpen = false;
     if (this.globalClickUnlisten) {
       this.globalClickUnlisten();
       this.globalClickUnlisten = null;
     }
+  }
+
+  /**
+   * Toggle the extended menu
+   */
+  toggleMenu(): void {
+    this.menuOpen = !this.menuOpen;
   }
 
   /**
@@ -549,6 +563,18 @@ Switch modes using the toggle above. Try:
   async handleBuyCommand(input: string): Promise<void> {
     if (!this.validateContext()) return;
 
+    // Prevent creating new orders while one is executing
+    if (this.isExecutingOrder) {
+      this.addMessage('Please wait for the current order to complete.', 'assistant');
+      return;
+    }
+
+    // Warn if there's already a pending order
+    if (this.pendingOrder) {
+      this.addMessage('You already have a pending order. Please confirm or cancel it first.', 'assistant');
+      return;
+    }
+
     const units = this.extractNumber(input, 'buy') || this.extractNumber(input, '');
     let price: number | null = null;
 
@@ -593,6 +619,18 @@ Switch modes using the toggle above. Try:
   async handleSellCommand(input: string): Promise<void> {
     if (!this.validateContext()) return;
 
+    // Prevent creating new orders while one is executing
+    if (this.isExecutingOrder) {
+      this.addMessage('Please wait for the current order to complete.', 'assistant');
+      return;
+    }
+
+    // Warn if there's already a pending order
+    if (this.pendingOrder) {
+      this.addMessage('You already have a pending order. Please confirm or cancel it first.', 'assistant');
+      return;
+    }
+
     const units = this.extractNumber(input, 'sell') || this.extractNumber(input, '');
     let price: number | null = null;
 
@@ -635,45 +673,70 @@ Switch modes using the toggle above. Try:
    * Confirm the pending order and execute it
    */
   async confirmPending(): Promise<void> {
-    if (!this.pendingOrder || !this.validateContext()) return;
-
-    const { type, units, price } = this.pendingOrder;
-    this.addMessage(`Executing ${type} order: ${units} @ $${price.toFixed(2)}...`, 'assistant');
-
-    const result = await this.orderExecutionService.placeAndExecuteOrder(
-      this.currentEnvironment!.id,
-      this.currentParticipant!.id,
-      this.currentStock!.id,
-      type,
-      price,
-      units
-    );
-
-    if (result.success) {
-      let message = `✓ ${result.message}`;
-      if (result.tradesExecuted && result.tradesExecuted > 0) {
-        message += `\n${result.tradesExecuted} trade(s) executed immediately.`;
-      }
-      this.addMessage(message, 'assistant');
-
-      // Reload context data
-      await this.loadContextFromIds(
-        this.currentEnvironment!.id,
-        this.currentParticipant!.id,
-        this.currentStock!.id
-      );
-    } else {
-      this.addMessage(`❌ ${result.message}`, 'assistant');
+    // Prevent multiple simultaneous executions
+    if (this.isExecutingOrder) {
+      console.warn('Order execution already in progress');
+      return;
     }
 
+    if (!this.pendingOrder || !this.validateContext()) {
+      this.pendingOrder = null;
+      return;
+    }
+
+    // Store order details and clear pending order immediately to prevent re-execution
+    const { type, units, price } = this.pendingOrder;
     this.pendingOrder = null;
+    this.isExecutingOrder = true;
+
+    try {
+      this.addMessage(`Executing ${type} order: ${units} @ $${price.toFixed(2)}...`, 'assistant');
+
+      const result = await this.orderExecutionService.placeAndExecuteOrder(
+        this.currentEnvironment!.id,
+        this.currentParticipant!.id,
+        this.currentStock!.id,
+        type,
+        price,
+        units
+      );
+
+      if (result.success) {
+        let message = `✓ ${result.message}`;
+        if (result.tradesExecuted && result.tradesExecuted > 0) {
+          message += `\n${result.tradesExecuted} trade(s) executed immediately.`;
+        }
+        this.addMessage(message, 'assistant');
+
+        // Reload context data
+        await this.loadContextFromIds(
+          this.currentEnvironment!.id,
+          this.currentParticipant!.id,
+          this.currentStock!.id
+        );
+      } else {
+        this.addMessage(`❌ ${result.message}`, 'assistant');
+      }
+    } catch (error: any) {
+      console.error('Error executing order:', error);
+      this.addMessage(`❌ Failed to execute order: ${error.message || 'Unknown error'}`, 'assistant');
+    } finally {
+      // Always clear execution state
+      this.isExecutingOrder = false;
+    }
   }
 
   /**
    * Cancel the pending order
    */
   cancelPending(): void {
-    if (!this.pendingOrder) return;
+    if (!this.pendingOrder && !this.isExecutingOrder) return;
+    
+    if (this.isExecutingOrder) {
+      this.addMessage('Cannot cancel - order is currently being executed.', 'assistant');
+      return;
+    }
+    
     this.addMessage('Pending order cancelled.', 'assistant');
     this.pendingOrder = null;
   }
