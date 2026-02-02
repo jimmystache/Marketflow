@@ -26,22 +26,25 @@
 
     <!-- Quick Actions -->
     <div class="quick-actions" *ngIf="currentEnvironment && currentStock">
-      <button 
-        class="quick-action-btn high-volatility"
-        (click)="quickActionHighVolatility()"
-        [disabled]="botSimulationRunning"
-        title="Run 30-second high volatility bot simulation">
-        <span class="icon">⚡</span>
-        <span class="label">High Vol</span>
-      </button>
-      <button 
-        class="quick-action-btn extreme-volatility"
-        (click)="quickActionExtremeVolatility()"
-        [disabled]="botSimulationRunning"
-        title="Run 30-second extreme volatility bot simulation">
-        <span class="icon">🔥</span>
-        <span class="label">Extreme Vol</span>
-      </button>
+      <div class="quick-actions-label">Simulation:</div>
+      <div class="quick-actions-buttons">
+        <button class="quick-action-btn normal-volatility" (click)="quickActionNormalVolatility()" [disabled]="botSimulationRunning" title="Run 30-second normal volatility bot simulation">
+          <span class="icon">⚪</span>
+          <span class="label">Normal</span>
+        </button>
+        <button class="quick-action-btn high-volatility" (click)="quickActionHighVolatility()" [disabled]="botSimulationRunning" title="Run 30-second high volatility bot simulation">
+          <span class="icon">⚡</span>
+          <span class="label">High</span>
+        </button>
+        <button class="quick-action-btn extreme-volatility" (click)="quickActionExtremeVolatility()" [disabled]="botSimulationRunning" title="Run 30-second extreme volatility bot simulation">
+          <span class="icon">🔥</span>
+          <span class="label">Extreme</span>
+        </button>
+        <button class="quick-action-btn stop-simulation" (click)="stopSimulation()" *ngIf="botSimulationRunning" title="Stop bot simulation">
+          <span class="icon">⏹️</span>
+          <span class="label">Stop</span>
+        </button>
+      </div>
     </div>
 
     <!-- Context Info -->

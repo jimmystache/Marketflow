@@ -705,7 +705,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
   /**
    * Run bot simulation with specified volatility and duration
    */
-  async runBotSimulation(volatility: 'high' | 'extreme', duration: number): Promise<void> {
+  async runBotSimulation(volatility: 'normal' | 'high' | 'extreme', duration: number): Promise<void> {
     if (this.botSimulationRunning) {
       this.addMessage('❌ Bot simulation is already running. Please wait for it to complete.', 'assistant');
       return;
@@ -717,7 +717,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
     }
 
     this.botSimulationRunning = true;
-    const volatilityLabel = volatility === 'extreme' ? '🔥 EXTREME' : '⚡ HIGH';
+    const volatilityLabel = volatility === 'extreme' ? '🔥 EXTREME' : volatility === 'high' ? '⚡ HIGH' : '⚪ NORMAL';
     this.addMessage(
       `🤖 Starting bot simulation...\n${volatilityLabel} volatility for ${duration} seconds\nEnvironment: ${this.currentEnvironment.name}\nStock: ${this.currentStock.symbol}`,
       'assistant'
@@ -746,7 +746,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
   /**
    * Execute bot simulation directly in the browser
    */
-  private async executeBotScript(volatility: 'high' | 'extreme', duration: number): Promise<{ success: boolean; message: string }> {
+  private async executeBotScript(volatility: 'normal' | 'high' | 'extreme', duration: number): Promise<{ success: boolean; message: string }> {
     if (!this.currentEnvironment || !this.currentStock) {
       return { success: false, message: 'Missing environment or stock context' };
     }
@@ -772,6 +772,13 @@ export class ChatAssistant implements OnInit, OnDestroy {
   }
 
   /**
+   * Quick action: Run normal volatility bot simulation
+   */
+  async quickActionNormalVolatility(): Promise<void> {
+    await this.runBotSimulation('normal', 30);
+  }
+
+  /**
    * Quick action: Run high volatility bot simulation
    */
   async quickActionHighVolatility(): Promise<void> {
@@ -783,6 +790,15 @@ export class ChatAssistant implements OnInit, OnDestroy {
    */
   async quickActionExtremeVolatility(): Promise<void> {
     await this.runBotSimulation('extreme', 30);
+  }
+
+  /**
+   * Stop the current bot simulation
+   */
+  stopSimulation(): void {
+    this.botSimulationService.stopSimulation();
+    this.botSimulationRunning = false;
+    this.addMessage('🛑 Bot simulation stopped', 'assistant');
   }
 
   /**

@@ -103,10 +103,26 @@
 /* Quick Actions */
 .quick-actions {
   display: flex;
-  gap: 8px;
-  padding: 12px 16px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
   background: linear-gradient(to bottom, #f8f9fa, #ffffff);
   border-bottom: 1px solid #e9ecef;
+}
+
+.quick-actions-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.quick-actions-buttons {
+  display: flex;
+  gap: 6px;
+  flex: 1;
 }
 
 .quick-action-btn {
@@ -114,25 +130,27 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 10px 8px;
-  border: 2px solid transparent;
-  border-radius: 10px;
+  gap: 2px;
+  padding: 6px 4px;
+  border: 1.5px solid transparent;
+  border-radius: 8px;
   background: white;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  min-width: 60px;
 }
 
 .quick-action-btn .icon {
-  font-size: 20px;
+  font-size: 16px;
   line-height: 1;
 }
 
 .quick-action-btn .label {
   color: #495057;
+  font-size: 9px;
 }
 
 .quick-action-btn.high-volatility {
@@ -155,6 +173,27 @@
   border-color: #e64a19;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(255, 87, 34, 0.3);
+}
+
+.quick-action-btn.stop-simulation {
+  border-color: #dc3545;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.quick-action-btn.stop-simulation:hover {
+  background: #ffebee;
+  border-color: #c62828;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    border-color: #dc3545;
+  }
+  50% {
+    border-color: #ff6b7a;
+  }
 }
 
 .quick-action-btn:active:not(:disabled) {

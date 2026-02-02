@@ -37,7 +37,7 @@ export class BotSimulationService {
   async startSimulation(
     environmentId: string,
     stockId: string,
-    volatility: 'high' | 'extreme',
+    volatility: 'normal' | 'high' | 'extreme',
     durationSeconds: number,
     numberOfBots: number = 5
   ): Promise<{ success: boolean; message: string }> {
@@ -46,7 +46,7 @@ export class BotSimulationService {
     }
 
     // Set volatility level
-    this.volatility = volatility === 'extreme' ? 0.95 : 0.55;
+    this.volatility = volatility === 'extreme' ? 0.95 : volatility === 'high' ? 0.55 : 0.25;
     this.spread = 0.15;
 
     try {
