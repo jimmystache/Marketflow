@@ -108,35 +108,40 @@ export class GrokAiService {
    * Build system prompt based on analysis type
    */
   private buildSystemPrompt(type: GrokAnalysisRequest['analysisType']): string {
-    const basePrompt = `You are a financial market analyst assistant for MarketFlow, a trading simulation platform. 
-You provide insights, predictions, and advice based on market data.`;
+    const basePrompt = `You are a financial market analyst assistant for MarketFlow, a trading simulation platform.
+You provide insights, predictions, and advice based on market data.
+ALWAYS respond concisely in plain text, using short bullet points or brief paragraphs.
+NEVER use tables, markdown, or code blocks. Only include the most important, actionable insights.
+Avoid verbose explanations, unnecessary details, and formatting that will not render well in a chat UI.`;
 
-    switch (type) {
+   switch (type) {
       case 'fundamental':
         return `${basePrompt}
-Focus on fundamental analysis: assess the intrinsic value of assets based on market conditions, 
-trading patterns, and historical data. Provide clear, actionable insights.`;
+Focus on fundamental analysis: assess the intrinsic value of assets based on market conditions, trading patterns, and historical data.
+Summarize your answer in 2-4 short bullet points or a brief paragraph.`;
 
       case 'prediction':
         return `${basePrompt}
-Focus on price prediction: analyze recent trades, order book depth, and market momentum to predict 
-short-term price movements. Be specific about expected price ranges and timeframes.`;
+Focus on price prediction: analyze recent trades, order book depth, and market momentum to predict short-term price movements.
+Be specific about expected price ranges and timeframes, but keep your answer concise and actionable.`;
 
       case 'order-advice':
         return `${basePrompt}
 Focus on order recommendations: based on current market conditions, suggest specific trading actions.
-Format your response with clear action (BUY/SELL/HOLD), suggested price, units, and confidence level.
-Structure your advice as:
+Respond with clear action (BUY/SELL/HOLD), suggested price, units, and confidence level.
+Format your advice as:
 ACTION: [BUY/SELL/HOLD]
 PRICE: [suggested price]
 UNITS: [suggested quantity]
 CONFIDENCE: [0-100%]
-REASONING: [brief explanation]`;
+REASONING: [one or two short sentences]
+Do NOT use tables or markdown.`;
 
       case 'general':
       default:
         return `${basePrompt}
-Provide helpful market analysis and answer questions about trading, market conditions, and strategies.`;
+Provide helpful market analysis and answer questions about trading, market conditions, and strategies.
+Keep your answer concise and focused on the most important points.`;
     }
   }
 
