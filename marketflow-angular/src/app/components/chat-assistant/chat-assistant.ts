@@ -192,15 +192,39 @@ Switch modes using the toggle above. Try:
    * Add a message to the chat
    */
   addMessage(text: string, sender: 'user' | 'assistant'): void {
-    this.messages.push({
-      id: Date.now().toString() + Math.random(),
-      text,
-      sender,
-      timestamp: new Date()
-    });
-    
-    // Auto-scroll to bottom
-    setTimeout(() => this.scrollToBottom(), 50);
+    if (sender === 'assistant' && text.length > 0 && this.currentMode === 'analysis') {
+      // Typewriter effect for assistant
+      const id = Date.now().toString() + Math.random();
+      const message: ChatMessage = {
+        id,
+        text: '',
+        sender,
+        timestamp: new Date()
+      };
+      this.messages.push(message);
+      let i = 0;
+      const typeSpeed = 18; 
+      const typeNext = () => {
+        if (i <= text.length) {
+          message.text = text.slice(0, i);
+          i++;
+          setTimeout(typeNext, typeSpeed);
+          if (i % 4 === 0) setTimeout(() => this.scrollToBottom(), 0);
+        } else {
+          setTimeout(() => this.scrollToBottom(), 0);
+        }
+      };
+      typeNext();
+    } else {
+      // User or empty/instant message
+      this.messages.push({
+        id: Date.now().toString() + Math.random(),
+        text,
+        sender,
+        timestamp: new Date()
+      });
+      setTimeout(() => this.scrollToBottom(), 50);
+    }
   }
 
   /**
@@ -274,13 +298,14 @@ Switch modes using the toggle above. Try:
       });
 
       if (response.success) {
-        this.addMessage(response.analysis, 'assistant');
-
-        // If order advice with suggestions, show action buttons
+        // If order advice with suggestions, only show formatted version
         if (response.suggestions && response.suggestions.action) {
           const { action, price, units, confidence, reasoning } = response.suggestions;
-          const suggestionText = `\n\n💡 **AI Suggestion**:\nAction: ${action.toUpperCase()}\nPrice: $${price?.toFixed(2) || 'market'}\nUnits: ${units || 'N/A'}\nConfidence: ${confidence || 'N/A'}%\n${reasoning ? `\nReasoning: ${reasoning}` : ''}`;
+          const suggestionText = `${action.toUpperCase()}: ${units || 'N/A'} shares @ $${price?.toFixed(2) || 'market'}\nConfidence: ${confidence || 'N/A'}%\n\n${reasoning || ''}`;
           this.addMessage(suggestionText, 'assistant');
+        } else {
+          // For other analysis types, show the raw analysis
+          this.addMessage(response.analysis, 'assistant');
         }
       } else {
         this.addMessage(`❌ ${response.error}`, 'assistant');
@@ -903,7 +928,6 @@ Switch modes using the toggle above. Try:
       '• run bot simulation extreme for 2 minutes\n' +
       '• Or use quick action buttons above\n\n' +
       'Information:\n' +
-      '• show environment info\n' +
       '• what\'s my position?\n' +
       '• what are my stats?\n' +
       '• show cash balance\n' +

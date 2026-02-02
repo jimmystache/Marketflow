@@ -128,14 +128,12 @@ Be specific about expected price ranges and timeframes, but keep your answer con
       case 'order-advice':
         return `${basePrompt}
 Focus on order recommendations: based on current market conditions, suggest specific trading actions.
-Respond with clear action (BUY/SELL/HOLD), suggested price, units, and confidence level.
-Format your advice as:
+Format your response EXACTLY as follows (no additional text or explanations):
 ACTION: [BUY/SELL/HOLD]
-PRICE: [suggested price]
-UNITS: [suggested quantity]
-CONFIDENCE: [0-100%]
-REASONING: [one or two short sentences]
-Do NOT use tables or markdown.`;
+PRICE: [suggested price as number only]
+UNITS: [suggested quantity as number only]
+CONFIDENCE: [0-100 as number only]
+REASONING: [one or two concise sentences]`;
 
       case 'general':
       default:
