@@ -24,8 +24,26 @@
       <button class="close-button" (click)="toggleChat()">×</button>
     </div>
 
-    <!-- Quick Actions -->
-    <div class="quick-actions" *ngIf="currentEnvironment && currentStock">
+    <!-- Mode Toggle -->
+    <div class="mode-toggle">
+      <button 
+        class="mode-btn" 
+        [class.active]="currentMode === 'command'"
+        (click)="switchMode('command')">
+        <span class="icon">⚡</span>
+        <span>Command</span>
+      </button>
+      <button 
+        class="mode-btn" 
+        [class.active]="currentMode === 'analysis'"
+        (click)="switchMode('analysis')">
+        <span class="icon">🧠</span>
+        <span>Analysis</span>
+      </button>
+    </div>
+
+    <!-- Quick Actions (Command Mode Only) -->
+    <div class="quick-actions" *ngIf="currentMode === 'command' && currentEnvironment && currentStock">
       <div class="quick-actions-label">Simulation:</div>
       <div class="quick-actions-buttons">
         <button class="quick-action-btn normal-volatility" (click)="quickActionNormalVolatility()" [disabled]="botSimulationRunning" title="Run 30-second normal volatility bot simulation">

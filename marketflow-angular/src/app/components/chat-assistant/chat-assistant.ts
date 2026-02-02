@@ -13,6 +13,7 @@ import {
 import { TradingContextService } from '../../services/trading-context.service';
 import { OrderExecutionService } from '../../services/order-execution.service';
 import { BotSimulationService } from '../../services/bot-simulation.service';
+import { GrokAiService, MarketContext } from '../../services/grok-ai.service';
 
 interface ChatMessage {
   id: string;
@@ -40,6 +41,9 @@ export class ChatAssistant implements OnInit, OnDestroy {
   messages: ChatMessage[] = [];
   userInput = '';
   
+  // Mode: command or analysis
+  currentMode: 'command' | 'analysis' = 'command';
+  
   // Current environment context
   currentEnvironment: DbTradingEnvironment | null = null;
   currentParticipant: DbEnvironmentParticipant | null = null;
@@ -63,19 +67,20 @@ export class ChatAssistant implements OnInit, OnDestroy {
     private orderExecutionService: OrderExecutionService,
     private elRef: ElementRef,
     private renderer: Renderer2,
-    private botSimulationService: BotSimulationService
+    private botSimulationService: BotSimulationService,
+    private grokAiService: GrokAiService
   ) {}
 
 
   ngOnInit(): void {
-    const welcome = `Hi — I can help you trade and get information about your session. Try commands like:
-- buy 10 shares at $50
-- buy 5 at ask
-- sell 5 at bid
-- what's my position?
-- show environment info
-- what are my stats?
-- run bot simulation (high/extreme) for 30 seconds`;
+    const welcome = `Hi — I can help you trade and analyze markets.
+
+🔷 **Command Mode**: Execute trades, manage positions, run bot simulations
+🔷 **Analysis Mode**: Get AI-powered market insights, predictions, and advice
+
+Switch modes using the toggle above. Try:
+**Command**: buy 10 at $50, what's my position, run bot simulation
+**Analysis**: what's the market trend?, should I buy now?, predict price movement`;
     this.addMessage(welcome, 'assistant');
     
     // Subscribe to trading context changes
@@ -196,8 +201,169 @@ export class ChatAssistant implements OnInit, OnDestroy {
     this.addMessage(input, 'user');
     this.userInput = '';
 
-    // Process the command
-    await this.processCommand(input);
+    // Route to appropriate handler based on mode
+    if (this.currentMode === 'command') {
+      await this.processCommand(input);
+    } else {
+      await this.processAnalysisQuery(input);
+    }
+  }
+
+  /**
+   * Switch between command and analysis modes
+   */
+  switchMode(mode: 'command' | 'analysis'): void {
+    this.currentMode = mode;
+    if (mode === 'command') {
+      this.addMessage('Switched to Command Mode. You can now execute trades and manage positions.', 'assistant');
+    } else {
+      this.addMessage('Switched to Analysis Mode. Ask me about market trends, predictions, or get trading advice.', 'assistant');
+    }
+  }
+
+  /**
+   * Process analysis query using Grok AI
+   */
+  async processAnalysisQuery(query: string): Promise<void> {
+    if (!this.currentEnvironment || !this.currentStock) {
+      this.addMessage('⚠️ Please navigate to the trading page first to set your environment and stock context.', 'assistant');
+      return;
+    }
+
+    this.addMessage('🤔 Analyzing market data...', 'assistant');
+
+    try {
+      // Gather market context
+      const marketContext = await this.buildMarketContext();
+
+      // Determine analysis type based on query
+      const analysisType = this.detectAnalysisType(query);
+
+      // Call Grok AI service
+      const response = await this.grokAiService.analyzeMarket({
+        query,
+        marketContext,
+        analysisType
+      });
+
+      if (response.success) {
+        this.addMessage(response.analysis, 'assistant');
+
+        // If order advice with suggestions, show action buttons
+        if (response.suggestions && response.suggestions.action) {
+          const { action, price, units, confidence, reasoning } = response.suggestions;
+          const suggestionText = `\n\n💡 **AI Suggestion**:\nAction: ${action.toUpperCase()}\nPrice: $${price?.toFixed(2) || 'market'}\nUnits: ${units || 'N/A'}\nConfidence: ${confidence || 'N/A'}%\n${reasoning ? `\nReasoning: ${reasoning}` : ''}`;
+          this.addMessage(suggestionText, 'assistant');
+        }
+      } else {
+        this.addMessage(`❌ ${response.error}`, 'assistant');
+      }
+    } catch (error: any) {
+      this.addMessage(`❌ Analysis failed: ${error.message}`, 'assistant');
+    }
+  }
+
+  /**
+   * Build market context for AI analysis
+   */
+  private async buildMarketContext(): Promise<MarketContext> {
+    const context: MarketContext = {
+      environmentId: this.currentEnvironment!.id,
+      stockSymbol: this.currentStock!.symbol
+    };
+
+    // Get recent trades
+    try {
+      const { data: trades } = await this.supabaseService.getClient()
+        .from('environment_trades')
+        .select('*')
+        .eq('market_id', this.currentEnvironment!.id)
+        .eq('stock_id', this.currentStock!.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      
+      if (trades && trades.length > 0) {
+        context.recentTrades = trades;
+        context.currentPrice = Number(trades[0].price);
+      }
+    } catch (error) {
+      console.error('Failed to fetch trades:', error);
+    }
+
+    // Get order book
+    try {
+      const { data: orders } = await this.supabaseService.getClient()
+        .from('environment_orders')
+        .select('*')
+        .eq('market_id', this.currentEnvironment!.id)
+        .eq('stock_id', this.currentStock!.id)
+        .in('status', ['open', 'partial'])
+        .limit(50);
+      
+      if (orders) {
+        const bids = orders
+          .filter((o: any) => o.type === 'buy')
+          .sort((a: any, b: any) => Number(b.price) - Number(a.price))
+          .slice(0, 10);
+        const asks = orders
+          .filter((o: any) => o.type === 'sell')
+          .sort((a: any, b: any) => Number(a.price) - Number(b.price))
+          .slice(0, 10);
+        
+        context.orderBook = { bids, asks };
+      }
+    } catch (error) {
+      console.error('Failed to fetch order book:', error);
+    }
+
+    // Get user position
+    if (this.currentParticipant) {
+      try {
+        const { data: position } = await this.supabaseService.getClient()
+          .from('environment_positions')
+          .select('*')
+          .eq('participant_id', this.currentParticipant.id)
+          .eq('stock_id', this.currentStock!.id)
+          .single();
+        
+        if (position) {
+          context.userPosition = {
+            units: Number(position.units),
+            avgPrice: Number(position.avg_price)
+          };
+        }
+
+        context.userCash = Number(this.currentParticipant.available_cash);
+      } catch (error) {
+        console.error('Failed to fetch user position:', error);
+      }
+    }
+
+    return context;
+  }
+
+  /**
+   * Detect analysis type from query
+   */
+  private detectAnalysisType(query: string): 'fundamental' | 'prediction' | 'order-advice' | 'general' {
+    const lower = query.toLowerCase();
+    
+    if (lower.includes('should i') || lower.includes('recommend') || lower.includes('advice') || 
+        lower.includes('buy or sell') || lower.includes('what should')) {
+      return 'order-advice';
+    }
+    
+    if (lower.includes('predict') || lower.includes('forecast') || lower.includes('price will') ||
+        lower.includes('where is') || lower.includes('going to')) {
+      return 'prediction';
+    }
+    
+    if (lower.includes('value') || lower.includes('fundamental') || lower.includes('worth') ||
+        lower.includes('fair price')) {
+      return 'fundamental';
+    }
+    
+    return 'general';
   }
 
   /**
