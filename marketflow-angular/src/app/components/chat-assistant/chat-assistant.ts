@@ -80,14 +80,13 @@ export class ChatAssistant implements OnInit, OnDestroy {
 
 
   ngOnInit(): void {
-    const welcome = `Hi — I can help you trade and analyze markets.
-
-🔷 **Command Mode**: Execute trades, manage positions, run bot simulations
-🔷 **Analysis Mode**: Get AI-powered market insights, predictions, and advice
-
-Switch modes using the toggle above. Try:
-**Command**: buy 10 at $50, what's my position, run bot simulation
-**Analysis**: what's the market trend?, should I buy now?, predict price movement`;
+     const welcome = `<b>Hey!</b> I can help you trade and analyze markets.<br>
+      <b>🔷 Command Mode:</b> Execute trades, manage positions, run bot simulations<br>
+      <b>🔷 Analysis Mode:</b> Get AI-powered market insights, predictions, and advice<br>
+        <b>Command:</b> buy 10 at $50, what's my position, run bot simulation<br>
+      <b>Analysis:</b> what's the market trend?, should I buy now?, predict price movement<br>
+      <b>For commands :</b> type 'help'
+  `;
     this.addMessage(welcome, 'assistant');
     
     // Subscribe to trading context changes

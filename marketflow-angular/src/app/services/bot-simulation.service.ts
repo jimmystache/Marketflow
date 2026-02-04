@@ -285,7 +285,7 @@ export class BotSimulationService {
         );
 
         // Record trade
-        await this.supabaseService.recordEnvironmentTrade({
+        const trade = await this.supabaseService.recordEnvironmentTrade({
           market_id: environmentId,
           stock_id: stockId,
           buy_order_id: bestBid.id,
@@ -295,6 +295,15 @@ export class BotSimulationService {
           price: matchPrice,
           units: matchUnits
         });
+        
+        // if (trade) {
+        //   console.log('🤖 Bot trade recorded:', {
+        //     price: matchPrice,
+        //     units: matchUnits,
+        //     market_id: environmentId,
+        //     trade_id: trade.id
+        //   });
+        // }
 
         // Update orders
         const buyNewFilled = bestBid.filled_units + matchUnits;

@@ -101,7 +101,7 @@
         class="message"
         [class.user-message]="message.sender === 'user'"
         [class.assistant-message]="message.sender === 'assistant'">
-        <div class="message-content">{{message.text}}</div>
+        <div class="message-content" [innerHTML]="message.text"></div>
         <div class="message-time">{{message.timestamp | date:'short'}}</div>
       </div>
     </div>

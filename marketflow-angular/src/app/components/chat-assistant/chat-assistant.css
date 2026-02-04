@@ -11,7 +11,7 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(15deg, #2af1b6 0%, #000000 20%);
   box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
   display: flex;
   align-items: center;
@@ -70,7 +70,7 @@
 
 /* Header */
 .chat-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #52f094 0%, #000000 10%);
   color: white;
   padding: 16px 20px;
   display: flex;
@@ -137,7 +137,7 @@
 }
 
 .mode-btn.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: black;
   border-color: transparent;
   color: white;
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);

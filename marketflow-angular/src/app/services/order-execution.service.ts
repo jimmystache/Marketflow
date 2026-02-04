@@ -280,7 +280,25 @@ export class OrderExecutionService {
     
     const buyRemaining = freshBuyOrder.units - freshBuyOrder.filled_units;
     const sellRemaining = freshSellOrder.units - freshSellOrder.filled_units;
-    const tradeUnits = Math.min(buyRemaining, sellRemaining);
+
+    // Safety check: ensure seller still has available units (prevents over-selling loops)
+    const sellerPositions = await this.supabaseService.getParticipantPositions(
+      freshSellOrder.market_id,
+      freshSellOrder.participant_id
+    );
+    const sellerPosition = sellerPositions.find(p => p.stock_id === freshSellOrder.stock_id);
+    const sellerUnits = sellerPosition?.units || 0;
+    const sellerOpenOrders = await this.supabaseService.getParticipantOrders(
+      freshSellOrder.participant_id,
+      freshSellOrder.stock_id
+    );
+    const otherOpenSellUnits = sellerOpenOrders
+      .filter(o => o.id !== freshSellOrder.id && o.type === 'sell' && (o.status === 'open' || o.status === 'partial'))
+      .reduce((sum, o) => sum + (o.units - o.filled_units), 0);
+    const sellerAvailableForThisOrder = Math.max(0, sellerUnits - otherOpenSellUnits);
+
+    // Cap trade units by what the seller can actually deliver
+    const tradeUnits = Math.min(buyRemaining, sellRemaining, sellerAvailableForThisOrder);
     const tradePrice = Number(freshSellOrder.price);
 
     if (tradeUnits <= 0) return false;
