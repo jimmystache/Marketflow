@@ -67,6 +67,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
   
   // Subscription to trading context
   private contextSubscription?: Subscription;
+  private tradesSubscription?: Subscription;
 
   constructor(
     private supabaseService: SupabaseService,
@@ -108,9 +109,12 @@ export class ChatAssistant implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    // Cleanup subscription
+    // Cleanup subscriptions
     if (this.contextSubscription) {
       this.contextSubscription.unsubscribe();
+    }
+    if (this.tradesSubscription) {
+      this.tradesSubscription.unsubscribe();
     }
     if (this.globalClickUnlisten) {
       this.globalClickUnlisten();
@@ -144,6 +148,36 @@ export class ChatAssistant implements OnInit, OnDestroy {
     if (!this.currentStock || this.currentStock.id !== stockId) {
       this.currentStock = await this.supabaseService.getEnvironmentStock(stockId);
     }
+    
+    // Load recent trades for analysis context (frontend state)
+    if (this.currentEnvironment && this.currentStock) {
+      this.recentTrades = await this.supabaseService.getEnvironmentTrades(
+        this.currentEnvironment.id,
+        this.currentStock.id,
+        50 // Get more trades for better AI context
+      );
+      
+      // Subscribe to real-time trade updates for live context
+      this.subscribeToTradeUpdates(this.currentEnvironment.id, this.currentStock.id);
+    }
+  }
+  
+  /**
+   * Subscribe to real-time trade updates to keep recentTrades fresh
+   */
+  private subscribeToTradeUpdates(envId: string, stockId: string): void {
+    // Unsubscribe from previous subscription if any
+    if (this.tradesSubscription) {
+      this.tradesSubscription.unsubscribe();
+    }
+    
+    // Subscribe to envTrades$ observable from SupabaseService
+    this.tradesSubscription = this.supabaseService.envTrades$.subscribe((trades) => {
+      // Filter for current stock and keep the most recent 50
+      this.recentTrades = trades
+        .filter(t => t.stock_id === stockId)
+        .slice(0, 50);
+    });
   }
 
   /**
@@ -316,6 +350,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
 
   /**
    * Build market context for AI analysis
+   * Uses frontend state from trading context for real-time accuracy
    */
   private async buildMarketContext(): Promise<MarketContext> {
     const context: MarketContext = {
@@ -323,42 +358,42 @@ export class ChatAssistant implements OnInit, OnDestroy {
       stockSymbol: this.currentStock!.symbol
     };
 
-    // Get recent trades
-    try {
-      const { data: trades } = await this.supabaseService.getClient()
-        .from('environment_trades')
-        .select('*')
-        .eq('market_id', this.currentEnvironment!.id)
-        .eq('stock_id', this.currentStock!.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      
-      if (trades && trades.length > 0) {
-        context.recentTrades = trades;
-        context.currentPrice = Number(trades[0].price);
+    // Use frontend state from recentTrades (already loaded from trading component)
+    if (this.recentTrades && this.recentTrades.length > 0) {
+      context.recentTrades = this.recentTrades.slice(0, 20);
+      context.currentPrice = Number(this.recentTrades[0].price);
+    } else {
+      // Fallback: fetch from DB if frontend state is not yet populated
+      try {
+        const trades = await this.supabaseService.getEnvironmentTrades(
+          this.currentEnvironment!.id,
+          this.currentStock!.id,
+          20
+        );
+        if (trades.length > 0) {
+          context.recentTrades = trades;
+          context.currentPrice = Number(trades[0].price);
+        }
+      } catch (error) {
+        console.error('Failed to fetch trades:', error);
       }
-    } catch (error) {
-      console.error('Failed to fetch trades:', error);
     }
 
-    // Get order book
+    // Get order book from frontend state (live and accurate)
     try {
-      const { data: orders } = await this.supabaseService.getClient()
-        .from('environment_orders')
-        .select('*')
-        .eq('market_id', this.currentEnvironment!.id)
-        .eq('stock_id', this.currentStock!.id)
-        .in('status', ['open', 'partial'])
-        .limit(50);
+      const orders = await this.supabaseService.getEnvironmentOpenOrders(
+        this.currentEnvironment!.id,
+        this.currentStock!.id
+      );
       
-      if (orders) {
+      if (orders.length > 0) {
         const bids = orders
-          .filter((o: any) => o.type === 'buy')
-          .sort((a: any, b: any) => Number(b.price) - Number(a.price))
+          .filter(o => o.type === 'buy')
+          .sort((a, b) => Number(b.price) - Number(a.price))
           .slice(0, 10);
         const asks = orders
-          .filter((o: any) => o.type === 'sell')
-          .sort((a: any, b: any) => Number(a.price) - Number(b.price))
+          .filter(o => o.type === 'sell')
+          .sort((a, b) => Number(a.price) - Number(b.price))
           .slice(0, 10);
         
         context.orderBook = { bids, asks };
@@ -367,27 +402,17 @@ export class ChatAssistant implements OnInit, OnDestroy {
       console.error('Failed to fetch order book:', error);
     }
 
-    // Get user position
+    // Get user position from frontend state (positions array)
     if (this.currentParticipant) {
-      try {
-        const { data: position } = await this.supabaseService.getClient()
-          .from('environment_positions')
-          .select('*')
-          .eq('participant_id', this.currentParticipant.id)
-          .eq('stock_id', this.currentStock!.id)
-          .single();
-        
-        if (position) {
-          context.userPosition = {
-            units: Number(position.units),
-            avgPrice: Number(position.avg_price)
-          };
-        }
-
-        context.userCash = Number(this.currentParticipant.available_cash);
-      } catch (error) {
-        console.error('Failed to fetch user position:', error);
+      const position = this.positions.find(p => p.stock_id === this.currentStock!.id);
+      if (position) {
+        context.userPosition = {
+          units: Number(position.units),
+          avgPrice: Number(position.avg_price)
+        };
       }
+
+      context.userCash = Number(this.currentParticipant.available_cash);
     }
 
     return context;

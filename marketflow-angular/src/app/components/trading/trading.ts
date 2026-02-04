@@ -25,12 +25,6 @@ import { BaseChartDirective } from 'ng2-charts';
 import {
   Chart as ChartJS,
   ChartConfiguration,
-  LineController,
-  LineElement,
-  LinearScale,
-  PointElement,
-  Tooltip,
-  Legend,
 } from 'chart.js';
 Chart.register(...registerables);
 
@@ -202,7 +196,8 @@ export class Trading implements OnInit, OnDestroy {
         backgroundColor: 'rgba(22,163,74,0.15)',
         pointRadius: 0,
         borderWidth: 2,
-        tension: 0.25,
+        tension: 0.4,
+        cubicInterpolationMode: 'monotone',
       },
     ],
   };
@@ -212,6 +207,8 @@ export class Trading implements OnInit, OnDestroy {
     maintainAspectRatio: false,
     animation: false,
     parsing: false,
+    normalized: true,
+    spanGaps: false,
     plugins: {
       legend: { display: false },
       tooltip: {
@@ -260,7 +257,7 @@ export class Trading implements OnInit, OnDestroy {
 
   private priceSeriesRebuildTimer: ReturnType<typeof setTimeout> | null = null;
   private lastPriceSeriesRebuildAt = 0;
-  private readonly priceSeriesRebuildMinIntervalMs = 120;
+  private readonly priceSeriesRebuildMinIntervalMs = 60;
 
   // My orders
   myOrders: LocalOrder[] = [];
@@ -1096,7 +1093,7 @@ export class Trading implements OnInit, OnDestroy {
 
   private rebuildPriceSeriesFromTradesNow(): void {
     const datasetTemplate = (this.priceChartData.datasets?.[0] as any) ?? {};
-    const maxPoints = 400;
+    const maxPoints = 250;
 
     const trades = this.trades ?? [];
     if (trades.length === 0) {
@@ -1151,12 +1148,14 @@ export class Trading implements OnInit, OnDestroy {
         {
           ...datasetTemplate,
           data: points,
+          tension: 0.4,
+          cubicInterpolationMode: 'monotone',
         },
       ],
     };
 
     // Ensure the directive redraws even if the canvas stays mounted.
-    queueMicrotask(() => this.priceChartDirective?.update());
+    queueMicrotask(() => this.priceChartDirective?.update('none'));
   }
 
   /**
