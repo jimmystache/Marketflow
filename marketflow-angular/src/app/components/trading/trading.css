@@ -1523,7 +1523,7 @@ p {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: linear-gradient(135deg, #1a2332 0%, #0f1419 100%);
+  background: var(--green-50);
   padding: 2rem;
   position: relative;
   overflow-y: auto;
@@ -1531,7 +1531,7 @@ p {
 
 .create-environment-card,
 .join-environment-card {
-  background: #1e2837;
+  background: #fff;
   border-radius: 1rem;
   padding: 2rem;
   max-width: 700px;
@@ -1544,7 +1544,7 @@ p {
 
 .create-environment-card h1,
 .join-environment-card h1 {
-  color: #fff;
+  color: #111827;
   font-size: 1.5rem;
   font-weight: 700;
   margin-bottom: 1.5rem;
@@ -1562,7 +1562,7 @@ p {
 }
 
 .form-section h3 {
-  color: #9ca3af;
+  color: #111827;
   font-size: 0.875rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -1601,13 +1601,14 @@ p {
 .form-row textarea,
 .form-row select {
   width: 100%;
-  background: #151c28;
+  background: var(--green-100);
   border: 1px solid #2d3a4f;
   border-radius: 0.5rem;
   padding: 0.75rem 1rem;
-  color: #fff;
+  color: #9ca3af;
   font-size: 0.9375rem;
   transition: all 200ms ease;
+  box-sizing: border-box;
 }
 
 .form-row input:focus,
@@ -1646,7 +1647,7 @@ p {
 }
 
 .checkbox-label span {
-  color: #e5e7eb;
+  color: #111827;
   font-size: 0.9375rem;
   font-weight: normal;
   text-transform: none;
@@ -1676,7 +1677,7 @@ p {
 }
 
 .stock-form {
-  background: #151c28;
+  background: var(--white-200);
   border: 1px solid #2d3a4f;
   border-radius: 0.75rem;
   padding: 1.25rem;
@@ -1845,7 +1846,7 @@ p {
 
 .search-input-group input {
   flex: 1;
-  background: #151c28;
+  background: var(--green-100);
   border: 1px solid #2d3a4f;
   border-radius: 0.5rem;
   padding: 0.75rem 1rem;
