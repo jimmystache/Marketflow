@@ -1628,6 +1628,12 @@ export class Trading implements OnInit, OnDestroy {
    * Set active tab
    */
   setActiveTab(tab: 'orderbook' | 'history' | 'myorders' | 'graph'): void {
+    if (this.activeTab === 'graph' && tab !== 'graph') {
+      if (this.priceChart) {
+        this.priceChart.destroy();
+        this.priceChart = null;
+      }
+    }
     this.activeTab = tab;
 
     if (tab === 'graph') {
@@ -1751,39 +1757,35 @@ export class Trading implements OnInit, OnDestroy {
 
     const prices = sortedTrades.map((t) => Number(t.price));
 
-    // Destroy existing chart if it exists
-    if (this.priceChart) {
-      this.priceChart.destroy();
+    if (!this.priceChart) {
+      this.priceChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: this.symbol,
+              data: prices,
+              borderColor: 'red',
+              backgroundColor: 'rgba(37, 99, 235, 0.1)',
+              tension: 0.25,
+              pointRadius: 0, // perf boost
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+        },
+      });
+
+      return;
     }
 
-    this.priceChart = new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: this.symbol,
-            data: prices,
-            borderColor: 'red',
-            backgroundColor: 'rgba(37, 99, 235, 0.1)',
-            tension: 0.25,
-            pointRadius: 3,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: {
-            title: { display: true, text: 'Time' },
-          },
-          y: {
-            title: { display: true, text: 'Price' },
-          },
-        },
-      },
-    });
+    this.priceChart.data.labels = labels;
+    this.priceChart.data.datasets[0].data = prices;
+    this.priceChart.update('none');
   }
 
   shortId(id: string): string {
