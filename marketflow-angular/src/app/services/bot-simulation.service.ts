@@ -27,7 +27,7 @@ export class BotSimulationService {
   private bots: BotState[] = [];
   private currentMid = 100; // Starting mid price
   private volatility = 0.25;
-  private spread = 0.25;
+  private spread = 0.15;
 
   constructor(private supabaseService: SupabaseService) {}
 
@@ -46,8 +46,8 @@ export class BotSimulationService {
     }
 
     // Set volatility level
-    this.volatility = volatility === 'extreme' ? 3.00 : volatility === 'high' ? 0.65 : 0.25;
-    this.spread = 0.50;
+    this.volatility = volatility === 'extreme' ? 5.0 : volatility === 'high' ? 1.6 : 0.25;
+    this.spread = 0.15;
 
     try {
       // Initialize bots
@@ -191,6 +191,12 @@ export class BotSimulationService {
         // Place new order
         await this.placeRandomOrder(environmentId, stockId, bot);
       }
+
+      // Periodic matching sweep to catch orders placed at different times
+      // Increases matching probability by finding crosses between existing orders
+      if (Math.random() < 0.4) {
+        await this.tryMatchOrders(environmentId, stockId);
+      }
     }, 350); // Run every 350ms
   }
 
@@ -199,12 +205,12 @@ export class BotSimulationService {
    */
   private updateMarketRegime(): void {
     // Drift
-    const drift = (Math.random() - 0.5) * 0.02;
+    const drift = (Math.random() - 0.5) * 0.1;
     this.currentMid += drift;
 
     // Volatility shock
     if (Math.random() < this.volatility * 0.01) {
-      const shock = (Math.random() - 0.5) * this.volatility * 2;
+      const shock = (Math.random() - 0.5) * this.volatility * 3;
       this.currentMid += shock;
     }
 
@@ -226,12 +232,14 @@ export class BotSimulationService {
         ? this.randomInt(25, 90) 
         : this.clamp(Math.round(this.randomBetween(1, personality.avgUnits * 2.5)), 1, 50);
 
-      // Price: near mid with some spread
+      // Price: tighter to mid for more crosses (aggressive bots are very tight)
       const skew = (Math.random() - 0.5) * this.spread;
       const away = Math.abs(skew) + this.randomBetween(0.05, this.spread * 1.3);
+      // Aggressive bots place much closer to mid (0.3x) for higher match probability
+      const spreadMultiplier = personality.aggression > 0.6 ? 0.3 : 0.7;
       let price = side === 'buy' 
-        ? this.currentMid - away * (personality.aggression > 0.6 ? 0.6 : 1.0)
-        : this.currentMid + away * (personality.aggression > 0.6 ? 0.6 : 1.0);
+        ? this.currentMid - away * spreadMultiplier
+        : this.currentMid + away * spreadMultiplier;
 
       price = Number(this.clamp(price, 0.01, 100000).toFixed(2));
 
@@ -252,8 +260,8 @@ export class BotSimulationService {
         bot.recentOrderIds = bot.recentOrderIds.slice(0, 30);
       }
 
-      // Try to match orders immediately
-      if (Math.random() < 0.3) {
+      // Try to match orders immediately (80% chance for more trades)
+      if (Math.random() < 0.8) {
         await this.tryMatchOrders(environmentId, stockId);
       }
     } catch (error) {

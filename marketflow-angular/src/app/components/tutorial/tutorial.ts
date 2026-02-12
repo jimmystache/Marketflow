@@ -3,10 +3,10 @@ import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 
 @Component({
-  selector: 'app-environment-setup',
+  selector: 'app-tutorial',
   imports: [FormsModule],
-  templateUrl: './environment-setup.html',
-  styleUrl: './environment-setup.css',
+  templateUrl: './tutorial.html',
+  styleUrl: './tutorial.css',
 })
 export class EnvironmentSetup {
     environmentName: string = '';
