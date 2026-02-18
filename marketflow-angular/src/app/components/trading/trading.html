@@ -426,13 +426,17 @@
       </div>
       
       <div class="header-center">
-        <div class="trader-badge">
+        <div class="trader-badge"
+            (mouseenter)="showHelp($event, 'This is you.')"
+            (mouseleave)="closeTooltip()">
           <span class="trader-icon">👤</span>
           <span class="trader-name">{{ traderUsername }}</span>
         </div>
         
         <!-- Stock Selector -->
-        <div class="stock-selector" *ngIf="environmentStocks.length > 1">
+        <div class="stock-selector" *ngIf="environmentStocks.length > 1"
+            (mouseenter)="showHelp($event, 'You can use this to change the current stock.')"
+            (mouseleave)="closeTooltip()">
           <select [(ngModel)]="selectedStockId" (change)="onStockSelectChange()">
             <option *ngFor="let stock of environmentStocks" [value]="stock.id">
               {{ stock.symbol }} - {{ stock.name || stock.symbol }}
@@ -451,6 +455,13 @@
             <polygon points="5 3 19 12 5 21 5 3"/>
           </svg>
           {{ isPaused ? 'Resume' : 'Pause' }}
+        </button>
+
+        <button 
+          class="help-toggle-btn" 
+          [class.active]="helpMode" 
+          (click)="toggleHelpMode()">
+          Help
         </button>
         
         <button class="logout-btn" (click)="leaveEnvironment()" title="Leave Environment">
@@ -474,7 +485,11 @@
     <!-- Left Panel - Account & Order Entry -->
     <aside class="left-panel">
       <!-- Account Summary -->
-      <div class="account-summary">
+      <div 
+      class="account-summary"
+      (mouseenter)="showHelp($event, 'This shows your cash balances')"
+      (mouseleave)="closeTooltip()"
+      >
         <div class="account-row">
           <span class="account-label">CASH</span>
           <div class="account-values">
@@ -499,19 +514,28 @@
       </div>
 
       <!-- Order Entry -->
-      <div class="order-entry">
-        <div class="symbol-display">{{ symbol }}</div>
+      <div 
+      class="order-entry">
+        <div 
+        class="symbol-display"
+        (mouseenter)="showHelp($event, 'The stock you are currently trading.')"
+        (mouseleave)="closeTooltip()"
+        >{{ symbol }}</div>
         
         <!-- Buy/Sell Toggle -->
         <div class="order-type-toggle">
           <button 
             class="type-btn buy-btn" 
+            (mouseenter)="showHelp($event, 'Click me to change to buying stocks.')"
+            (mouseleave)="closeTooltip()"
             [class.active]="orderType === 'buy'"
             (click)="setOrderType('buy')">
             BUY
           </button>
           <button 
-            class="type-btn sell-btn" 
+            class="type-btn sell-btn"
+            (mouseenter)="showHelp($event, 'Click me to change to selling stocks.')"
+            (mouseleave)="closeTooltip()" 
             [class.active]="orderType === 'sell'"
             (click)="setOrderType('sell')">
             SELL
@@ -519,7 +543,10 @@
         </div>
 
         <!-- Units Input -->
-        <div class="input-group">
+        <div class="input-group"
+        (mouseenter)="showHelp($event, 'You can change the number of stocks you want to buy or sell here.')"
+        (mouseleave)="closeTooltip()"
+        >
           <label class="input-label">UNITS</label>
           <div class="slider-container">
             <input 
@@ -548,7 +575,10 @@
         </div>
 
         <!-- Price Input -->
-        <div class="input-group">
+        <div class="input-group"
+        (mouseenter)="showHelp($event, 'You can change the price that you want to buy or sell at here.')"
+        (mouseleave)="closeTooltip()"
+        >
           <label class="input-label">PRICE</label>
           <div class="slider-container">
             <input 
@@ -581,6 +611,8 @@
         <!-- Place Order Button -->
         <button 
           class="place-order-btn"
+          (mouseenter)="showHelp($event, 'Click me to place your buy or sell orders.')"
+          (mouseleave)="closeTooltip()"
           [class.buy]="orderType === 'buy'"
           [class.sell]="orderType === 'sell'"
           [class.disabled-paused]="isPaused"
@@ -596,7 +628,11 @@
     <!-- Center Panel - Order Book & Trade History -->
     <main class="center-panel">
       <!-- Symbol Header -->
-      <div class="symbol-header">
+      <div 
+      class="symbol-header"
+      (mouseenter)="showHelp($event, 'The current stock, click the arrows to change to a different stock.')"
+      (mouseleave)="closeTooltip()"
+      >
         <button class="nav-arrow" *ngIf="environmentStocks.length > 1" (click)="selectPrevStock()">‹</button>
         <span class="symbol-title">{{ symbol }}{{ selectedStock?.name ? ' - ' + selectedStock?.name : '' }}</span>
         <button class="nav-arrow" *ngIf="environmentStocks.length > 1" (click)="selectNextStock()">›</button>
@@ -605,26 +641,34 @@
       <!-- Tab Navigation -->
       <div class="tab-nav">
         <button 
-          class="tab-btn" 
+          class="tab-btn"
+          (mouseenter)="showHelp($event, 'Click me to go to the orderbook.')"
+          (mouseleave)="closeTooltip()" 
           [class.active]="activeTab === 'orderbook'"
           (click)="setActiveTab('orderbook')">
           ORDER BOOK
         </button>
         <button 
           class="tab-btn" 
+          (mouseenter)="showHelp($event, 'Click me to see the entire trade history of the current stock.')"
+          (mouseleave)="closeTooltip()"
           [class.active]="activeTab === 'history'"
           (click)="setActiveTab('history')">
           TRADE HISTORY
         </button>
         <button 
-          class="tab-btn" 
+          class="tab-btn"
+          (mouseenter)="showHelp($event, 'Click me view all your orders, both filled and unfilled.')"
+          (mouseleave)="closeTooltip()" 
           [class.active]="activeTab === 'myorders'"
           (click)="setActiveTab('myorders')">
           MY ORDERS
           <span *ngIf="getOpenOrdersCount() > 0" class="order-count">{{ getOpenOrdersCount() }}</span>
         </button>
         <button 
-          class="tab-btn" 
+          class="tab-btn"
+          (mouseenter)="showHelp($event, 'Click me to see a bigger graph that you can change the time span being shown.')"
+          (mouseleave)="closeTooltip()" 
           [class.active]="activeTab === 'graph'"
           (click)="setActiveTab('graph')">
           GRAPH
@@ -634,7 +678,11 @@
       <!-- Order Book View -->
       <div class="tab-content" *ngIf="activeTab === 'orderbook'">
         <!-- Price Chart (built from trades) -->
-        <div class="live-chart-card">
+        <div 
+        class="live-chart-card"
+        (mouseenter)="showHelp($event, 'A live chart showing you the prices the current stock is being sold at.')"
+        (mouseleave)="closeTooltip()"
+        >
           <div class="live-chart-title">
             <span>PRICE</span>
             <div class="live-chart-controls">
@@ -677,9 +725,13 @@
         <div class="orderbook-scroll">
 
         <!-- Asks (Sell Orders) - Displayed in reverse so lowest is at bottom -->
-        <div class="order-book asks">
+        <div 
+        class="order-book asks"
+        (mouseenter)="showHelp($event, 'All the stocks that are currently being sold and the price to buy it.<br>The stocks that you are selling have an orange dot on the right.')"
+        (mouseleave)="closeTooltip()"
+        >
           <div 
-            class="book-row ask" 
+            class="book-row ask"
             *ngFor="let ask of asks.slice().reverse()"
             (click)="setOrderPriceFromBook(ask.price)">
             <span class="col-units">{{ ask.units }}</span>
@@ -700,7 +752,11 @@
         </div>
 
         <!-- Bids (Buy Orders) -->
-        <div class="order-book bids">
+        <div 
+        class="order-book bids"
+        (mouseenter)="showHelp($event, 'All orders for the stock that are currently open.<br>Your buy orders have an orange dot on the right.')"
+        (mouseleave)="closeTooltip()" 
+        >
           <div 
             class="book-row bid" 
             *ngFor="let bid of bids"
@@ -720,7 +776,9 @@
 
       <!-- Trade History View -->
       <div class="tab-content" *ngIf="activeTab === 'history'">
-        <div class="trade-history">
+        <div class="trade-history"
+            (mouseenter)="showHelp($event, 'This shows you all of the trades that have happend with the current stock.<br>It tells you the time the trade occured, the price the trade happened at, and the number of stocks traded.')"
+            (mouseleave)="closeTooltip()">
           <div class="history-header">
             <span class="col-time">TIME</span>
             <span class="col-price">PRICE</span>
@@ -744,7 +802,9 @@
 
       <!-- My Orders View -->
       <div class="tab-content" *ngIf="activeTab === 'myorders'">
-        <div class="my-orders">
+        <div class="my-orders"
+            (mouseenter)="showHelp($event, 'This area shows all the trades that you have made or that are still outstanding. you can click the cancel button to remove any outstanding trades.')"
+            (mouseleave)="closeTooltip()">
           <div class="orders-header">
             <span class="col-type">TYPE</span>
             <span class="col-price">PRICE</span>
@@ -783,7 +843,9 @@
       </div>
       <div class="tab-content" *ngIf="activeTab === 'graph'">
         <div class="graph-header">
-          <div class="time-range-selector">
+          <div class="time-range-selector"
+              (mouseenter)="showHelp($event, 'Here you can change the time range of the chart to view specifics.')"
+              (mouseleave)="closeTooltip()">
             <label for="timeRange">Time Range:</label>
             <select 
               id="timeRange" 
@@ -833,27 +895,37 @@
       <div class="market-stats">
         <h3 class="stats-title">Market Stats</h3>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The highest price someone will buy the stock for.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Best Bid</span>
           <span class="stat-value bid-color">{{ bestBid !== null ? formatCurrency(bestBid) : '-' }}</span>
         </div>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The highest price someone will sell the stock for.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Best Ask</span>
           <span class="stat-value ask-color">{{ bestAsk !== null ? formatCurrency(bestAsk) : '-' }}</span>
         </div>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The difference between the best bid and best ask.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Spread</span>
           <span class="stat-value">{{ spread !== null ? formatCurrency(spread) : '-' }}</span>
         </div>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The price of the last sold stock.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Last Price</span>
           <span class="stat-value highlight">{{ lastPrice !== null ? formatCurrency(lastPrice) : '-' }}</span>
         </div>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The total number of stocks that have been traded.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Total Trades</span>
           <span class="stat-value">{{ trades.length }}</span>
         </div>
@@ -862,17 +934,23 @@
         
         <h3 class="stats-title">Your Position</h3>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The number of stocks you currently hold.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">{{ symbol }} Units</span>
           <span class="stat-value">{{ positionUnits }}</span>
         </div>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'I dont know about this one.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Avg Price</span>
           <span class="stat-value">{{ positionAvgPrice > 0 ? formatCurrency(positionAvgPrice) : '-' }}</span>
         </div>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The value of all the stocks you hold.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">P&L</span>
           <span class="stat-value" [class.positive]="lastPrice && positionUnits > 0 && (lastPrice - positionAvgPrice) > 0" [class.negative]="lastPrice && positionUnits > 0 && (lastPrice - positionAvgPrice) < 0">
             {{ positionUnits > 0 && lastPrice ? formatCurrency((lastPrice - positionAvgPrice) * positionUnits) : '-' }}
@@ -883,7 +961,9 @@
         
         <h3 class="stats-title">Environment Info</h3>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'This tells you if you are able to short the current stock.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Shorting</span>
           <span class="stat-value">{{ currentEnvironment?.allow_shorting ? 'Allowed' : 'Not Allowed' }}</span>
         </div>
@@ -893,7 +973,9 @@
           <span class="stat-value">{{ currentEnvironment?.max_short_units }} units</span>
         </div>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The number of different stocks in the market.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Stocks</span>
           <span class="stat-value">{{ environmentStocks.length }}</span>
         </div>
@@ -906,4 +988,13 @@
     </aside>
   </div>
   </ng-container>
+</div>
+
+<div *ngIf="activeTooltip"
+     class="tooltip"
+     [ngClass]="{'tooltip-left': activeTooltip.position === 'left', 'tooltip-right': activeTooltip.position === 'right'}"
+     [style.top.px]="activeTooltip.y"
+     [style.left.px]="activeTooltip.x"
+     [innerHTML]="activeTooltip.text"
+     (click)="closeTooltip()">
 </div>

@@ -28,6 +28,8 @@ import {
 } from 'chart.js';
 Chart.register(...registerables);
 
+import { HelpModeService } from '../../services/help-mode.service';
+
 interface OrderBookEntry {
   price: number;
   units: number;
@@ -302,10 +304,16 @@ export class Trading implements OnInit, OnDestroy {
   usernameInput: string = '';
   isLoggingIn: boolean = false;
 
+  // Tooltip information
+  helpMode: boolean = false;
+
+  activeTooltip: { text: string; x: number; y: number; position?: 'left' | 'right' } | null = null;
+
   constructor(
     private router: Router,
     private supabaseService: SupabaseService,
     private tradingContextService: TradingContextService,
+    private helpModeService: HelpModeService,
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -1830,5 +1838,40 @@ export class Trading implements OnInit, OnDestroy {
     } catch (error) {
       console.warn('Copy to clipboard failed:', error);
     }
+  }
+
+  toggleHelpMode(): void {
+    this.helpMode = !this.helpMode;
+    this.activeTooltip = null;
+  }
+
+  showHelp(event: MouseEvent, text: string): void {
+    if (!this.helpMode) return; 
+    const tooltipWidth = 250;
+    const tooltipHeight = 100;
+    const padding = 10;
+
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    // Horizontal position
+    let x = event.clientX + padding;
+    let position: 'left' | 'right' = 'right';
+    if (event.clientX + tooltipWidth + padding > viewportWidth) {
+      x = event.clientX - tooltipWidth - padding;
+      position = 'left';
+    }
+
+    // Vertical position
+    let y = event.clientY + padding;
+    if (event.clientY + tooltipHeight + padding > viewportHeight) {
+      y = Math.max(padding, event.clientY - tooltipHeight - padding);
+    }
+
+    this.activeTooltip = { text, x, y, position };
+  }
+
+  closeTooltip(): void {
+    this.activeTooltip = null;
   }
 }

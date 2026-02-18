@@ -2124,6 +2124,67 @@ p {
   visibility: hidden;
 }
 
+/* Tooltips */
+.tooltip {
+  position: fixed;
+  background: #333;
+  color: white;
+  padding: 8px;
+  border-radius: 4px;
+  max-width: 250px;
+  z-index: 9999;
+  white-space: pre-wrap; /* preserve \n */
+}
+
+/* optional arrow */
+.tooltip::after {
+  content: '';
+  position: absolute;
+  width: 0; 
+  height: 0; 
+  border: 5px solid transparent;
+}
+
+.tooltip-left::after {
+  top: 10px;
+  right: -10px;
+  border-left-color: #333;
+}
+
+.tooltip-right::after {
+  top: 10px;
+  left: -10px;
+  border-right-color: #333;
+}
+
+/* Help Button */
+.help-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: 1px solid #374151;
+  color: #9ca3af;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 200ms ease;
+  margin-right: 0.5rem;
+}
+
+.help-toggle-btn:hover {
+  background-color: var(--green-100);
+  color: #10b981;
+  border-color: 1px solid #374151;
+}
+
+.help-toggle-btn.active {
+  background-color: var(--green-200);
+  color: #047857;
+  border-color: 1px solid #374151;
+}
+
 @media (max-width: 768px) {
   .environment-actions {
     grid-template-columns: 1fr;
