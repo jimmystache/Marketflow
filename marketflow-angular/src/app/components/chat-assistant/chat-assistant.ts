@@ -342,6 +342,8 @@ export class ChatAssistant implements OnInit, OnDestroy {
           // For other analysis types, show the raw analysis
           this.addMessage(response.analysis, 'assistant');
         }
+      } else if (response.isRejection) {
+        this.addMessage(response.error!, 'assistant');
       } else {
         this.addMessage(`❌ ${response.error}`, 'assistant');
       }
