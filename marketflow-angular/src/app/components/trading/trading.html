@@ -452,7 +452,7 @@
     <!-- Left Panel - Account & Order Entry -->
     <aside class="left-panel">
       <!-- Account Summary -->
-      <div class="account-summary">
+      <div class="account-summary" id="wt-account">
         <div class="account-row">
           <span class="account-label">CASH</span>
           <div class="account-values">
@@ -477,7 +477,7 @@
       </div>
 
       <!-- Order Entry -->
-      <div class="order-entry">
+      <div class="order-entry" id="wt-order-entry">
         <div class="symbol-display">{{ symbol }}</div>
         
         <!-- Buy/Sell Toggle -->
@@ -574,7 +574,7 @@
     <!-- Center Panel - Order Book & Trade History -->
     <main class="center-panel">
       <!-- Symbol Header -->
-      <div class="symbol-header">
+      <div class="symbol-header" id="wt-stock-selector">
         <button class="nav-arrow" *ngIf="environmentStocks.length > 1" (click)="selectPrevStock()">‹</button>
         <span class="symbol-title">{{ symbol }}{{ selectedStock?.name ? ' - ' + selectedStock?.name : '' }}</span>
         <button class="nav-arrow" *ngIf="environmentStocks.length > 1" (click)="selectNextStock()">›</button>
@@ -638,18 +638,7 @@
         <div class="book-header">
           <span class="col-units">UNITS</span>
           <span class="col-price">PRICE</span>
-          <span class="col-mine book-header-right">
-            <span>MINE</span>
-            <button
-              class="reset-book-btn"
-              type="button"
-              (click)="resetOrderBook()"
-              [disabled]="isResettingOrderBook"
-              title="Cancel all open orders (demo reset)"
-            >
-              {{ isResettingOrderBook ? 'RESETTING…' : 'RESET' }}
-            </button>
-          </span>
+          <span class="col-mine">MINE</span>
         </div>
 
         <div class="orderbook-scroll">
@@ -807,7 +796,7 @@
     </main>
 
     <!-- Right Panel - Market Stats (Optional) -->
-    <aside class="right-panel">
+    <aside class="right-panel" id="wt-market-stats">
       <div class="market-stats">
         <h3 class="stats-title">Market Stats</h3>
         

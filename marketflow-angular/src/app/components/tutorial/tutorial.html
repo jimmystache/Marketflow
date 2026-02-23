@@ -1,66 +1,30 @@
 <div class="tutorial-container">
-  <div class="form-wrapper">
-    <h1 class="environment-title">Environment Setup</h1>
-    <p class="environment-subtitle">Configure a new environment for your marketflow</p>
-    
-    <div class="environment-card">
-      <form class="environment-form" (ngSubmit)="onSubmit()">
-        <div class="form-group">
-          <label for="environmentName" class="form-label">Environment Name</label>
-          <input 
-            type="text" 
-            id="environmentName" 
-            name="environmentName"
-            class="form-input"
-            [(ngModel)]="environmentName"
-            placeholder="e.g., Production, Staging"
-            required
-          >
-        </div>
+  <div class="tutorial-wrapper">
+    <h1 class="tutorial-title">Key Terms</h1>
+    <p class="tutorial-subtitle">Choose a section to learn key trading terms.</p>
 
-        <div class="form-group">
-          <label for="description" class="form-label">Description</label>
-          <input 
-            type="text" 
-            id="description" 
-            name="description"
-            class="form-input"
-            [(ngModel)]="description"
-            placeholder="Describe this environment"
-            required
-          >
-        </div>
-
-        <div class="form-group">
-          <label for="apiKey" class="form-label">API Key</label>
-          <input 
-            type="text" 
-            id="apiKey" 
-            name="apiKey"
-            class="form-input"
-            [(ngModel)]="apiKey"
-            placeholder="Enter your API key"
-            required
-          >
-        </div>
-
-        <div class="form-group">
-          <label for="endpointUrl" class="form-label">Endpoint URL</label>
-          <input 
-            type="url" 
-            id="endpointUrl" 
-            name="endpointUrl"
-            class="form-input"
-            [(ngModel)]="endpointUrl"
-            placeholder="https://api.example.com"
-            required
-          >
-        </div>
-
-        <button type="submit" class="submit-button">Create Environment</button>
-      </form>
-
-      <button (click)="goTo('')" class="back-button">← Back</button>
+    <div class="tutorial-card">
+      <a class="tutorial-button" routerLink="/tutorial/ask-vs-bid">
+        <span class="btn-icon">&#x1F4B0;</span>
+        <span class="btn-label">Ask vs Bid</span>
+        <span class="btn-arrow">&#x2192;</span>
+      </a>
+      <a class="tutorial-button" routerLink="/tutorial/spread">
+        <span class="btn-icon">&#x1F4CA;</span>
+        <span class="btn-label">Spread</span>
+        <span class="btn-arrow">&#x2192;</span>
+      </a>
+      <a class="tutorial-button" routerLink="/tutorial/order-book">
+        <span class="btn-icon">&#x1F4D6;</span>
+        <span class="btn-label">Order Book</span>
+        <span class="btn-arrow">&#x2192;</span>
+      </a>
+      <a class="tutorial-button" routerLink="/tutorial/spotting-good-trades">
+        <span class="btn-icon">&#x1F3AF;</span>
+        <span class="btn-label">Spotting Good Trades</span>
+        <span class="btn-arrow">&#x2192;</span>
+      </a>
+      <a class="back-button" routerLink="/">&#x2190; Back</a>
     </div>
   </div>
 </div>
