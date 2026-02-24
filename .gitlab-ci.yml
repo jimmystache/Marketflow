@@ -8,19 +8,20 @@ build:
   stage: build
   cache:
     paths:
-      - node_modules/
+      - marketflow-angular/node_modules/
   script:
+    - cd marketflow-angular
     - npm ci
     - npm run build -- --configuration production --base-href "/$CI_PROJECT_NAME/"
   artifacts:
     paths:
-      - dist/
+      - marketflow-angular/dist/
 
 pages:
   stage: deploy
   script:
     - mkdir -p public
-    - cp -r dist/$(ls dist)/browser/* public/ 2>/dev/null || cp -r dist/$(ls dist)/* public/
+    - cp -r marketflow-angular/dist/marketflow-angular/browser/* public/
     - cp public/index.html public/404.html
   artifacts:
     paths:
