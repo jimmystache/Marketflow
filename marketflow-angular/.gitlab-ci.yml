@@ -1,0 +1,29 @@
+image: node:18
+
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  cache:
+    paths:
+      - node_modules/
+  script:
+    - npm ci
+    - npm run build -- --configuration production --base-href "/$CI_PROJECT_NAME/"
+  artifacts:
+    paths:
+      - dist/
+
+pages:
+  stage: deploy
+  script:
+    - mkdir -p public
+    - cp -r dist/$(ls dist)/browser/* public/ 2>/dev/null || cp -r dist/$(ls dist)/* public/
+    - cp public/index.html public/404.html
+  artifacts:
+    paths:
+      - public
+  only:
+    - Development
