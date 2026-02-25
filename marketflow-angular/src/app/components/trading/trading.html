@@ -447,7 +447,10 @@
       
       <div class="header-right">
         <!-- Pause Button (Admin Only) -->
-        <button *ngIf="isAdmin" class="pause-btn" [class.paused]="isPaused" (click)="togglePause()" title="{{ isPaused ? 'Resume Trading' : 'Pause Trading' }}">
+        <button *ngIf="isAdmin" class="pause-btn" 
+                (mouseenter)="showHelp($event, 'Press this button to pause and unpause the trading simulation.')"
+                (mouseleave)="closeTooltip()"
+                [class.paused]="isPaused" (click)="togglePause()">
           <svg *ngIf="!isPaused" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
           </svg>
@@ -803,7 +806,7 @@
       <!-- My Orders View -->
       <div class="tab-content" *ngIf="activeTab === 'myorders'">
         <div class="my-orders"
-            (mouseenter)="showHelp($event, 'This area shows all the trades that you have made or that are still outstanding. you can click the cancel button to remove any outstanding trades.')"
+            (mouseenter)="showHelp($event, 'This area shows all the trades that you have made or that are still outstanding. You can click the cancel button to remove any outstanding trades.')"
             (mouseleave)="closeTooltip()">
           <div class="orders-header">
             <span class="col-type">TYPE</span>
@@ -830,7 +833,9 @@
                 <button 
                   *ngIf="order.status === 'open' || order.status === 'partial'"
                   class="cancel-btn"
-                  (click)="cancelOrder(order)">
+                  (click)="cancelOrder(order)"
+                  (mouseenter)="showHelp($event, 'Click here to cancel the order.')"
+                  (mouseleave)="closeTooltip()">
                   Cancel
                 </button>
               </span>
@@ -942,7 +947,7 @@
         </div>
         
         <div class="stat-item"
-        (mouseenter)="showHelp($event, 'I dont know about this one.')"
+        (mouseenter)="showHelp($event, 'The ratio of stocks you have bought and the total amount you have spent on them.')"
         (mouseleave)="closeTooltip()">
           <span class="stat-label">Avg Price</span>
           <span class="stat-value">{{ positionAvgPrice > 0 ? formatCurrency(positionAvgPrice) : '-' }}</span>
@@ -980,7 +985,9 @@
           <span class="stat-value">{{ environmentStocks.length }}</span>
         </div>
         
-        <div class="stat-item" *ngIf="isAdmin">
+        <div class="stat-item" *ngIf="isAdmin"
+        (mouseenter)="showHelp($event, 'You are the admin for this market simulation.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Role</span>
           <span class="stat-value admin-badge">Admin</span>
         </div>
