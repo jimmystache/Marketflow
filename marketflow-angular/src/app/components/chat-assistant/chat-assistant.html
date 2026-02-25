@@ -1,0 +1,154 @@
+<div class="chat-container" [class.expanded]="isExpanded">
+  
+  <!-- Chat Button -->
+  <div 
+    class="chat-button"
+    *ngIf="!isExpanded"
+    (click)="toggleChat()">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2C6.48 2 2 6.48 2 12C2 13.54 2.36 14.99 3 16.27V22L8.73 19C9.99 19.64 11.46 20 13 20C18.52 20 23 15.52 23 10C23 4.48 18.52 0 13 0H12ZM12 18C10.88 18 9.83 17.73 8.91 17.26L7 18.18V15.91C5.75 14.83 5 13.24 5 11.5C5 8.46 7.69 6 11 6H12C15.31 6 18 8.46 18 11.5C18 14.54 15.31 17 12 17V18Z" fill="white"/>
+    </svg>
+    <span class="chat-badge" *ngIf="messages.length > 5">{{messages.length - 5}}</span>
+  </div>
+
+  <!-- Chat Window -->
+  <div class="chat-window" *ngIf="isExpanded">
+    <!-- Header -->
+    <div class="chat-header">
+      <div class="chat-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C6.48 2 2 6.48 2 12C2 13.54 2.36 14.99 3 16.27V22L8.73 19C9.99 19.64 11.46 20 13 20C18.52 20 23 15.52 23 10C23 4.48 18.52 0 13 0H12Z" fill="white"/>
+        </svg>
+        <span>Trading Assistant</span>
+      </div>
+      <button class="close-button" (click)="toggleChat()">×</button>
+    </div>
+
+    <!-- Mode Toggle -->
+    <div class="mode-toggle">
+      <button 
+        class="mode-btn" 
+        [class.active]="currentMode === 'command'"
+        (click)="switchMode('command')">
+        <span class="icon">⚡</span>
+        <span>Command</span>
+      </button>
+      <button 
+        class="mode-btn" 
+        [class.active]="currentMode === 'analysis'"
+        (click)="switchMode('analysis')">
+        <span class="icon">🧠</span>
+        <span>Analysis</span>
+      </button>
+      <!-- Menu Toggle Button -->
+      <button 
+        class="menu-toggle-btn" 
+        (click)="toggleMenu()"
+        [class.active]="menuOpen"
+        title="Options">
+        <span class="icon">{{ menuOpen ? '✕' : '☰' }}</span>
+      </button>
+    </div>
+
+    <!-- Collapsible Menu -->
+    <div class="extended-menu" *ngIf="menuOpen">
+      <!-- Context Info -->
+      <div class="menu-section" *ngIf="currentEnvironment || currentParticipant || currentStock">
+        <div class="menu-section-title">Context</div>
+        <div class="context-row" *ngIf="currentEnvironment">
+          <span class="context-label">Env:</span>
+          <span class="context-value">{{currentEnvironment.name || currentEnvironment.id}}</span>
+        </div>
+        <div class="context-row" *ngIf="currentParticipant">
+          <span class="context-label">User:</span>
+          <span class="context-value">{{currentParticipant.trader?.username || 'Unknown'}}</span>
+        </div>
+        <div class="context-row" *ngIf="currentStock">
+          <span class="context-label">Stock:</span>
+          <span class="context-value">{{currentStock.symbol}}</span>
+        </div>
+      </div>
+
+      <!-- Simulation Options (Command Mode Only) -->
+      <div class="menu-section" *ngIf="currentMode === 'command' && currentEnvironment && currentStock">
+        <div class="menu-section-title">Bot Simulation</div>
+        <div class="simulation-buttons">
+          <button class="sim-btn normal" (click)="quickActionNormalVolatility(); toggleMenu()" [disabled]="botSimulationRunning">
+            <span class="icon">⚪</span> Normal
+          </button>
+          <button class="sim-btn high" (click)="quickActionHighVolatility(); toggleMenu()" [disabled]="botSimulationRunning">
+            <span class="icon">⚡</span> High
+          </button>
+          <button class="sim-btn extreme" (click)="quickActionExtremeVolatility(); toggleMenu()" [disabled]="botSimulationRunning">
+            <span class="icon">🔥</span> Extreme
+          </button>
+          <button class="sim-btn stop" *ngIf="botSimulationRunning" (click)="stopSimulation(); toggleMenu()">
+            <span class="icon">⏹️</span> Stop
+          </button>
+        </div>
+      </div>
+
+      <!-- No Context Message -->
+      <div class="menu-section" *ngIf="!currentEnvironment && !currentStock">
+        <div class="no-context">Navigate to the trading page to enable simulations</div>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="chat-body">
+      <div 
+        *ngFor="let message of messages"
+        class="message"
+        [class.user-message]="message.sender === 'user'"
+        [class.assistant-message]="message.sender === 'assistant'">
+        <div class="message-content" [innerHTML]="message.text"></div>
+        <div class="message-time">{{message.timestamp | date:'short'}}</div>
+      </div>
+    </div>
+    <!-- Pending Order Confirmation -->
+    <div class="pending-order" *ngIf="pendingOrder || isExecutingOrder">
+      <div class="pending-summary" *ngIf="pendingOrder">
+        <strong>{{pendingOrder.type | titlecase}}</strong>
+        : {{pendingOrder.units}} @ ${{pendingOrder.price.toFixed(2)}}
+      </div>
+      <div class="pending-summary" *ngIf="isExecutingOrder && !pendingOrder">
+        <strong>Executing order...</strong>
+      </div>
+      <div class="pending-actions" *ngIf="!isExecutingOrder">
+        <button 
+          class="confirm-button" 
+          (click)="confirmPending()" 
+          [disabled]="isExecutingOrder">
+          Confirm
+        </button>
+        <button 
+          class="cancel-button" 
+          (click)="cancelPending()" 
+          [disabled]="isExecutingOrder">
+          Cancel
+        </button>
+      </div>
+      <div class="pending-actions" *ngIf="isExecutingOrder">
+        <div class="executing-indicator">Processing...</div>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="chat-input">
+      <input 
+        type="text"
+        [(ngModel)]="userInput"
+        (keyup.enter)="sendMessage()"
+        placeholder="Type a command..."
+        class="input-field" />
+      <button 
+        (click)="sendMessage()"
+        class="send-button"
+        [disabled]="!userInput.trim()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2.01 21L23 12L2.01 3L2 10L17 12L2 14L2.01 21Z" fill="currentColor"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>

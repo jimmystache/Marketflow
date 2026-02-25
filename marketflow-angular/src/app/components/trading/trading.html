@@ -634,7 +634,7 @@
       <!-- Order Book View -->
       <div class="tab-content" *ngIf="activeTab === 'orderbook'">
         <!-- Price Chart (built from trades) -->
-        <div class="live-chart-card" *ngIf="trades.length > 0; else waitingForTrades">
+        <div class="live-chart-card">
           <div class="live-chart-title">
             <span>PRICE</span>
             <div class="live-chart-controls">
@@ -649,14 +649,12 @@
               [data]="priceChartData"
               [options]="priceChartOptions"
             ></canvas>
+
+            <div class="chart-empty" *ngIf="trades.length === 0">
+              Waiting for trades...
+            </div>
           </div>
         </div>
-
-        <ng-template #waitingForTrades>
-          <div class="chart-empty">
-            Waiting for trades...
-          </div>
-        </ng-template>
 
         <!-- Column Headers -->
         <div class="book-header">

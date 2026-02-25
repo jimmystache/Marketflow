@@ -439,6 +439,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  max-height: 90vh;
 }
 
 /* Symbol Header */
@@ -663,14 +664,17 @@
 
 .order-book {
   min-height: 0;
+  max-height: 80vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 
 .order-book.asks {
-  justify-content: flex-end;
+  /* justify-content: flex-end; */
   border-top: 1px solid #2d3a4f;
+  overflow-y: auto;
+  max-height: 80vh;
 }
 
 .book-row {
@@ -984,7 +988,7 @@ p {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1a2332 0%, #0f1419 100%);
+  background: var(--green-50);
   padding: 1rem;
   position: relative;
 }
@@ -996,9 +1000,9 @@ p {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.05);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #9ca3af;
+  color: #fff;
   padding: 0.625rem 1rem;
   border-radius: 0.5rem;
   cursor: pointer;
@@ -1009,10 +1013,8 @@ p {
 }
 
 .back-to-home-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #fff;
-  transform: translateX(-2px);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
 }
 
 .back-to-home-btn svg {
@@ -1020,7 +1022,7 @@ p {
 }
 
 .login-card {
-  background: #1e2837;
+  background: #fff;
   border-radius: 1rem;
   padding: 2.5rem;
   max-width: 420px;
@@ -1035,14 +1037,14 @@ p {
 }
 
 .login-header h1 {
-  color: #fff;
+  color: #111827;
   font-size: 1.75rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
 }
 
 .login-header p {
-  color: #9ca3af;
+  color: #111827;
   font-size: 0.95rem;
 }
 
@@ -1059,13 +1061,14 @@ p {
 }
 
 .login-text-input {
-  background: #151c28;
+  background: var(--green-100);
   border: 1px solid #2d3a4f;
   border-radius: 0.5rem;
   padding: 0.875rem 1rem;
-  color: #fff;
+  color: #000000;
   font-size: 1rem;
   width: 100%;
+  box-sizing: border-box;
   transition: all 200ms ease;
 }
 
@@ -1353,13 +1356,13 @@ p {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: linear-gradient(135deg, #1a2332 0%, #0f1419 100%);
+  background: var(--green-50);
   padding: 2rem;
   position: relative;
 }
 
 .environment-select-card {
-  background: #1e2837;
+  background: #fff;
   border-radius: 1rem;
   padding: 2rem;
   max-width: 800px;
@@ -1375,7 +1378,7 @@ p {
 }
 
 .welcome-header h1 {
-  color: #fff;
+  color: #111827;
   font-size: 1.75rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
@@ -1394,7 +1397,7 @@ p {
 }
 
 .action-btn {
-  background: #151c28;
+  background: #fff;
   border: 2px solid #2d3a4f;
   border-radius: 1rem;
   padding: 2rem;
@@ -1410,6 +1413,7 @@ p {
 .action-btn:hover {
   border-color: #22c55e;
   transform: translateY(-2px);
+  background: var(--green-100);
 }
 
 .action-btn svg {
@@ -1417,7 +1421,7 @@ p {
 }
 
 .action-title {
-  color: #fff;
+  color: #111827;
   font-size: 1.125rem;
   font-weight: 600;
 }
@@ -1447,7 +1451,7 @@ p {
 }
 
 .environment-item {
-  background: #151c28;
+  background: #fff;
   border: 1px solid #2d3a4f;
   border-radius: 0.75rem;
   padding: 1rem 1.25rem;
@@ -1460,7 +1464,7 @@ p {
 
 .environment-item:hover {
   border-color: #22c55e;
-  background: #1a2332;
+  background: var(--green-100);
 }
 
 .env-info {
@@ -1470,7 +1474,7 @@ p {
 }
 
 .env-name {
-  color: #fff;
+  color: #111827;
   font-weight: 600;
   font-size: 1rem;
 }
@@ -1519,7 +1523,7 @@ p {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: linear-gradient(135deg, #1a2332 0%, #0f1419 100%);
+  background: var(--green-50);
   padding: 2rem;
   position: relative;
   overflow-y: auto;
@@ -1527,7 +1531,7 @@ p {
 
 .create-environment-card,
 .join-environment-card {
-  background: #1e2837;
+  background: #fff;
   border-radius: 1rem;
   padding: 2rem;
   max-width: 700px;
@@ -1540,7 +1544,7 @@ p {
 
 .create-environment-card h1,
 .join-environment-card h1 {
-  color: #fff;
+  color: #111827;
   font-size: 1.5rem;
   font-weight: 700;
   margin-bottom: 1.5rem;
@@ -1558,7 +1562,7 @@ p {
 }
 
 .form-section h3 {
-  color: #9ca3af;
+  color: #111827;
   font-size: 0.875rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -1597,13 +1601,14 @@ p {
 .form-row textarea,
 .form-row select {
   width: 100%;
-  background: #151c28;
+  background: var(--green-100);
   border: 1px solid #2d3a4f;
   border-radius: 0.5rem;
   padding: 0.75rem 1rem;
-  color: #fff;
+  color: #9ca3af;
   font-size: 0.9375rem;
   transition: all 200ms ease;
+  box-sizing: border-box;
 }
 
 .form-row input:focus,
@@ -1642,7 +1647,7 @@ p {
 }
 
 .checkbox-label span {
-  color: #e5e7eb;
+  color: #111827;
   font-size: 0.9375rem;
   font-weight: normal;
   text-transform: none;
@@ -1672,7 +1677,7 @@ p {
 }
 
 .stock-form {
-  background: #151c28;
+  background: var(--white-200);
   border: 1px solid #2d3a4f;
   border-radius: 0.75rem;
   padding: 1.25rem;
@@ -1841,11 +1846,11 @@ p {
 
 .search-input-group input {
   flex: 1;
-  background: #151c28;
+  background: var(--green-100);
   border: 1px solid #2d3a4f;
   border-radius: 0.5rem;
   padding: 0.75rem 1rem;
-  color: #fff;
+  color: #111827;
   font-size: 0.9375rem;
 }
 
@@ -1890,7 +1895,7 @@ p {
 }
 
 .search-results h3 {
-  color: #9ca3af;
+  color: #111827;
   font-size: 0.875rem;
   font-weight: 600;
   margin-bottom: 1rem;
@@ -1908,7 +1913,7 @@ p {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #151c28;
+  background: var(--green-100);
   border: 1px solid #2d3a4f;
   border-radius: 0.5rem;
   padding: 1rem;
@@ -1918,7 +1923,7 @@ p {
 
 .search-result-item:hover {
   border-color: #22c55e;
-  background: #1a2332;
+  background: var(--green-200);
 }
 
 .result-info {
@@ -1928,7 +1933,7 @@ p {
 }
 
 .result-name {
-  color: #fff;
+  color: #111827;
   font-size: 1rem;
   font-weight: 600;
 }

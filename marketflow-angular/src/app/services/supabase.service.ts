@@ -996,6 +996,13 @@ export class SupabaseService {
   }
 
   /**
+   * Alias for getEnvironment
+   */
+  async getTradingEnvironment(environmentId: string): Promise<DbTradingEnvironment | null> {
+    return this.getEnvironment(environmentId);
+  }
+
+  /**
    * Join an environment - returns participant data or throws error with specific message
    */
   async joinEnvironment(environmentId: string, traderId: string, isAdmin: boolean = false, password?: string): Promise<DbEnvironmentParticipant> {
@@ -1077,7 +1084,7 @@ export class SupabaseService {
   }
 
   /**
-   * Get participant info
+   * Get participant info by environment and trader
    */
   async getParticipant(environmentId: string, traderId: string): Promise<DbEnvironmentParticipant | null> {
     const { data, error } = await this.supabase
@@ -1088,6 +1095,26 @@ export class SupabaseService {
       `)
       .eq('market_id', environmentId)
       .eq('trader_id', traderId)
+      .single();
+
+    if (error) {
+      return null;
+    }
+
+    return data;
+  }
+
+  /**
+   * Get participant by ID directly
+   */
+  async getParticipantById(participantId: string): Promise<DbEnvironmentParticipant | null> {
+    const { data, error } = await this.supabase
+      .from('environment_participants')
+      .select(`
+        *,
+        trader:traders!trader_id(id, username)
+      `)
+      .eq('id', participantId)
       .single();
 
     if (error) {
@@ -1114,6 +1141,73 @@ export class SupabaseService {
   }
 
   /**
+   * Get or create participant (for bot simulations)
+   */
+  async getOrCreateParticipant(environmentId: string, traderId: string, startingCash: number): Promise<DbEnvironmentParticipant | null> {
+    const { data: existing } = await this.supabase
+      .from('environment_participants')
+      .select('*')
+      .eq('market_id', environmentId)
+      .eq('trader_id', traderId)
+      .single();
+
+    if (existing) return existing;
+
+    const { data, error } = await this.supabase
+      .from('environment_participants')
+      .insert({
+        market_id: environmentId,
+        trader_id: traderId,
+        cash: startingCash,
+        settled_cash: startingCash,
+        available_cash: startingCash,
+        is_admin: false
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating participant:', error);
+      return null;
+    }
+
+    return data;
+  }
+
+  /**
+   * Get or create environment position (for bot simulations)
+   */
+  async getOrCreateEnvironmentPosition(environmentId: string, participantId: string, stockId: string, startingUnits: number): Promise<DbEnvironmentPosition | null> {
+    const { data: existing } = await this.supabase
+      .from('environment_positions')
+      .select('*')
+      .eq('participant_id', participantId)
+      .eq('stock_id', stockId)
+      .single();
+
+    if (existing) return existing;
+
+    const { data, error } = await this.supabase
+      .from('environment_positions')
+      .insert({
+        market_id: environmentId,
+        participant_id: participantId,
+        stock_id: stockId,
+        units: startingUnits,
+        avg_price: 0
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating position:', error);
+      return null;
+    }
+
+    return data;
+  }
+
+  /**
    * Get stocks in an environment
    */
   async getEnvironmentStocks(environmentId: string): Promise<DbEnvironmentStock[]> {
@@ -1132,15 +1226,34 @@ export class SupabaseService {
   }
 
   /**
+   * Get a single environment stock by ID
+   */
+  async getEnvironmentStock(stockId: string): Promise<DbEnvironmentStock | null> {
+    const { data, error } = await this.supabase
+      .from('environment_stocks')
+      .select('*')
+      .eq('id', stockId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching stock:', error);
+      return null;
+    }
+
+    return data;
+  }
+
+  /**
    * Get participant positions
    */
-  async getParticipantPositions(participantId: string): Promise<DbEnvironmentPosition[]> {
+  async getParticipantPositions(environmentId: string, participantId: string): Promise<DbEnvironmentPosition[]> {
     const { data, error } = await this.supabase
       .from('environment_positions')
       .select(`
         *,
         stock:environment_stocks!stock_id(*)
       `)
+      .eq('market_id', environmentId)
       .eq('participant_id', participantId);
 
     if (error) {
@@ -1202,6 +1315,43 @@ export class SupabaseService {
     }
 
     return data || [];
+  }
+
+  /**
+   * Get all orders for a stock in an environment
+   */
+  async getEnvironmentOrders(environmentId: string, stockId: string): Promise<DbEnvironmentOrder[]> {
+    const { data, error } = await this.supabase
+      .from('environment_orders')
+      .select('*')
+      .eq('market_id', environmentId)
+      .eq('stock_id', stockId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching environment orders:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Get a single order by ID (used for reloading fresh state during trade matching)
+   */
+  async getEnvironmentOrderById(orderId: string): Promise<DbEnvironmentOrder | null> {
+    const { data, error } = await this.supabase
+      .from('environment_orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching order by ID:', error);
+      return null;
+    }
+
+    return data;
   }
 
   /**
@@ -1274,6 +1424,25 @@ export class SupabaseService {
 
     if (error) {
       console.error('Error fetching environment trades:', error);
+      return [];
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Get all trades for a participant in an environment
+   */
+  async getParticipantTrades(environmentId: string, participantId: string): Promise<DbEnvironmentTrade[]> {
+    const { data, error } = await this.supabase
+      .from('environment_trades')
+      .select('*')
+      .eq('market_id', environmentId)
+      .or(`buyer_participant_id.eq.${participantId},seller_participant_id.eq.${participantId}`)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching participant trades:', error);
       return [];
     }
 

@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -19,17 +19,12 @@ import {
   CreateEnvironmentInput,
   CreateStockInput,
 } from '../../services/supabase.service';
+import { TradingContextService } from '../../services/trading-context.service';
 import { Chart, registerables } from 'chart.js';
 import { BaseChartDirective } from 'ng2-charts';
 import {
   Chart as ChartJS,
   ChartConfiguration,
-  LineController,
-  LineElement,
-  LinearScale,
-  PointElement,
-  Tooltip,
-  Legend,
 } from 'chart.js';
 Chart.register(...registerables);
 
@@ -201,7 +196,8 @@ export class Trading implements OnInit, OnDestroy {
         backgroundColor: 'rgba(22,163,74,0.15)',
         pointRadius: 0,
         borderWidth: 2,
-        tension: 0.25,
+        tension: 0.4,
+        cubicInterpolationMode: 'monotone',
       },
     ],
   };
@@ -211,6 +207,8 @@ export class Trading implements OnInit, OnDestroy {
     maintainAspectRatio: false,
     animation: false,
     parsing: false,
+    normalized: true,
+    spanGaps: false,
     plugins: {
       legend: { display: false },
       tooltip: {
@@ -253,6 +251,13 @@ export class Trading implements OnInit, OnDestroy {
   };
 
   private tradePointTimes: number[] = [];
+
+  @ViewChild(BaseChartDirective)
+  private priceChartDirective?: BaseChartDirective;
+
+  private priceSeriesRebuildTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastPriceSeriesRebuildAt = 0;
+  private readonly priceSeriesRebuildMinIntervalMs = 60;
 
   // My orders
   myOrders: LocalOrder[] = [];
@@ -300,6 +305,7 @@ export class Trading implements OnInit, OnDestroy {
   constructor(
     private router: Router,
     private supabaseService: SupabaseService,
+    private tradingContextService: TradingContextService,
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -315,6 +321,16 @@ export class Trading implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.supabaseService.unsubscribeAll();
+
+    if (this.priceSeriesRebuildTimer) {
+      clearTimeout(this.priceSeriesRebuildTimer);
+      this.priceSeriesRebuildTimer = null;
+    }
+
+    if (this.copiedHintTimer) {
+      clearTimeout(this.copiedHintTimer);
+      this.copiedHintTimer = null;
+    }
   }
 
   /**
@@ -644,6 +660,13 @@ export class Trading implements OnInit, OnDestroy {
       this.environmentId = this.currentEnvironment.id;
       this.isPaused = this.currentEnvironment.is_paused;
 
+      // Update trading context
+      this.tradingContextService.setContext({
+        environmentId: this.environmentId,
+        participantId: this.participantId,
+        stockId: null // Will be set when stock is selected
+      });
+
       // Check if user is creator (admin)
       if (this.currentEnvironment.creator_id === this.traderId) {
         this.isAdmin = true;
@@ -705,6 +728,7 @@ export class Trading implements OnInit, OnDestroy {
 
     // Load positions
     this.environmentPositions = await this.supabaseService.getParticipantPositions(
+      this.environmentId,
       this.participantId,
     );
 
@@ -727,11 +751,19 @@ export class Trading implements OnInit, OnDestroy {
     this.selectedStockId = stock.id;
     this.symbol = stock.symbol;
 
+    // Update trading context
+    this.tradingContextService.setContext({
+      stockId: this.selectedStockId
+    });
+
     // Update position
     this.updateCurrentPosition();
 
     // Load orders and trades for this stock
     await this.loadStockData();
+
+    // Re-bind realtime channels to the newly selected stock.
+    this.subscribeToEnvironmentUpdates();
 
     if (this.activeTab === 'graph') {
       setTimeout(() => this.makePriceChart(), 0);
@@ -984,6 +1016,10 @@ export class Trading implements OnInit, OnDestroy {
     this.asks = [];
     this.trades = [];
     this.myOrders = [];
+    
+    // Clear trading context
+    this.tradingContextService.clearContext();
+    
     this.loadEnvironments();
     this.currentView = 'environment-select';
   }
@@ -1039,23 +1075,64 @@ export class Trading implements OnInit, OnDestroy {
   }
 
   private rebuildPriceSeriesFromTrades(): void {
-    if (!this.trades || this.trades.length === 0) {
-      (this.priceChartData.datasets[0] as any).data = [];
+    // Coalesce rapid-fire inserts (demo bots) to avoid rebuilding on every tick.
+    if (this.priceSeriesRebuildTimer) return;
+
+    const now = Date.now();
+    const elapsed = now - this.lastPriceSeriesRebuildAt;
+    const delay = elapsed >= this.priceSeriesRebuildMinIntervalMs
+      ? 0
+      : this.priceSeriesRebuildMinIntervalMs - elapsed;
+
+    this.priceSeriesRebuildTimer = setTimeout(() => {
+      this.priceSeriesRebuildTimer = null;
+      this.lastPriceSeriesRebuildAt = Date.now();
+      this.rebuildPriceSeriesFromTradesNow();
+    }, delay);
+  }
+
+  private rebuildPriceSeriesFromTradesNow(): void {
+    const datasetTemplate = (this.priceChartData.datasets?.[0] as any) ?? {};
+    const maxPoints = 250;
+
+    const trades = this.trades ?? [];
+    if (trades.length === 0) {
       this.tradePointTimes = [];
+      this.priceChartData = {
+        datasets: [
+          {
+            ...datasetTemplate,
+            data: [],
+          },
+        ],
+      };
+      queueMicrotask(() => this.priceChartDirective?.update());
       return;
     }
 
-    const sorted = [...this.trades].sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-    );
+    // Most service calls already return newest-first; avoid O(n log n) sort when possible.
+    const maybeDesc =
+      trades.length < 2 ||
+      new Date(trades[0].created_at).getTime() >= new Date(trades[1].created_at).getTime();
 
-    const maxPoints = 400;
-    const clipped = sorted.length > maxPoints ? sorted.slice(-maxPoints) : sorted;
+    const clippedOldestToNewest: DbTrade[] = (() => {
+      if (maybeDesc) {
+        const latest = trades.length > maxPoints ? trades.slice(0, maxPoints) : trades.slice();
+        return latest.slice().reverse();
+      }
+
+      const sorted = trades
+        .slice()
+        .sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        );
+      return sorted.length > maxPoints ? sorted.slice(-maxPoints) : sorted;
+    })();
 
     const points: Array<{ x: number; y: number }> = [];
     const times: number[] = [];
 
-    for (const t of clipped) {
+    for (const t of clippedOldestToNewest) {
       const ts = new Date(t.created_at).getTime();
       const price = Number(t.price);
       if (!Number.isFinite(price)) continue;
@@ -1065,15 +1142,20 @@ export class Trading implements OnInit, OnDestroy {
 
     this.tradePointTimes = times;
 
-    // Replace dataset to keep change detection happy.
+    // Replace dataset reference to keep Angular + ng2-charts change detection happy.
     this.priceChartData = {
       datasets: [
         {
-          ...(this.priceChartData.datasets[0] as any),
+          ...datasetTemplate,
           data: points,
+          tension: 0.4,
+          cubicInterpolationMode: 'monotone',
         },
       ],
     };
+
+    // Ensure the directive redraws even if the canvas stays mounted.
+    queueMicrotask(() => this.priceChartDirective?.update('none'));
   }
 
   /**
@@ -1546,6 +1628,12 @@ export class Trading implements OnInit, OnDestroy {
    * Set active tab
    */
   setActiveTab(tab: 'orderbook' | 'history' | 'myorders' | 'graph'): void {
+    if (this.activeTab === 'graph' && tab !== 'graph') {
+      if (this.priceChart) {
+        this.priceChart.destroy();
+        this.priceChart = null;
+      }
+    }
     this.activeTab = tab;
 
     if (tab === 'graph') {
@@ -1669,38 +1757,78 @@ export class Trading implements OnInit, OnDestroy {
 
     const prices = sortedTrades.map((t) => Number(t.price));
 
-    // Destroy existing chart if it exists
-    if (this.priceChart) {
-      this.priceChart.destroy();
+    if (!this.priceChart) {
+      this.priceChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: this.symbol,
+              data: prices,
+              borderColor: 'red',
+              backgroundColor: 'rgba(37, 99, 235, 0.1)',
+              tension: 0.25,
+              pointRadius: 0, // perf boost
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+        },
+      });
+
+      return;
     }
 
-    this.priceChart = new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: this.symbol,
-            data: prices,
-            borderColor: 'red',
-            backgroundColor: 'rgba(37, 99, 235, 0.1)',
-            tension: 0.25,
-            pointRadius: 3,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: {
-            title: { display: true, text: 'Time' },
-          },
-          y: {
-            title: { display: true, text: 'Price' },
-          },
-        },
-      },
-    });
+    this.priceChart.data.labels = labels;
+    this.priceChart.data.datasets[0].data = prices;
+    this.priceChart.update('none');
+  }
+
+  shortId(id: string): string {
+    const v = String(id || '');
+    if (!v) return '';
+    if (v.length <= 12) return v;
+    return `${v.slice(0, 6)}…${v.slice(-4)}`;
+  }
+
+  async copyEnvironmentId(): Promise<void> {
+    if (!this.environmentId) return;
+    await this.copyToClipboard(this.environmentId);
+  }
+
+  async copyStockId(): Promise<void> {
+    if (!this.selectedStockId) return;
+    await this.copyToClipboard(this.selectedStockId);
+  }
+
+  private async copyToClipboard(text: string): Promise<void> {
+    const value = String(text || '').trim();
+    if (!value) return;
+
+    try {
+      await navigator.clipboard.writeText(value);
+      return;
+    } catch {
+      // Fall back to legacy copy if Clipboard API is blocked.
+    }
+
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = value;
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    } catch (error) {
+      console.warn('Copy to clipboard failed:', error);
+    }
   }
 }
