@@ -404,13 +404,17 @@
       </div>
       
       <div class="header-center">
-        <div class="trader-badge">
+        <div class="trader-badge"
+            (mouseenter)="showHelp($event, 'This is you.')"
+            (mouseleave)="closeTooltip()">
           <span class="trader-icon">👤</span>
           <span class="trader-name">{{ traderUsername }}</span>
         </div>
         
         <!-- Stock Selector -->
-        <div class="stock-selector" *ngIf="environmentStocks.length > 1">
+        <div class="stock-selector" *ngIf="environmentStocks.length > 1"
+            (mouseenter)="showHelp($event, 'You can use this to change the current stock.')"
+            (mouseleave)="closeTooltip()">
           <select [(ngModel)]="selectedStockId" (change)="onStockSelectChange()">
             <option *ngFor="let stock of environmentStocks" [value]="stock.id">
               {{ stock.symbol }} - {{ stock.name || stock.symbol }}
@@ -421,7 +425,10 @@
       
       <div class="header-right">
         <!-- Pause Button (Admin Only) -->
-        <button *ngIf="isAdmin" class="pause-btn" [class.paused]="isPaused" (click)="togglePause()" title="{{ isPaused ? 'Resume Trading' : 'Pause Trading' }}">
+        <button *ngIf="isAdmin" class="pause-btn" 
+                (mouseenter)="showHelp($event, 'Press this button to pause and unpause the trading simulation.')"
+                (mouseleave)="closeTooltip()"
+                [class.paused]="isPaused" (click)="togglePause()">
           <svg *ngIf="!isPaused" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
           </svg>
@@ -429,6 +436,22 @@
             <polygon points="5 3 19 12 5 21 5 3"/>
           </svg>
           {{ isPaused ? 'Resume' : 'Pause' }}
+        </button>
+
+        <!-- Broadcast Message Button (Admin Only) -->
+        <button *ngIf="isAdmin" class="broadcast-btn" (click)="toggleMessageComposer()" title="Send Message to Participants">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m3 11 18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>
+          </svg>
+          Broadcast
+        </button>
+
+        <!-- Message History Button (All Users) -->
+        <button class="messages-btn" (click)="toggleMessageHistory()" title="View Messages" [class.has-unread]="getUnreadMessageCount() > 0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span *ngIf="getUnreadMessageCount() > 0" class="msg-badge">{{ getUnreadMessageCount() }}</span>
         </button>
         
         <button class="logout-btn" (click)="leaveEnvironment()" title="Leave Environment">
@@ -448,11 +471,106 @@
       <span>Trading is currently paused{{ currentEnvironment?.pause_reason ? ': ' + currentEnvironment?.pause_reason : '' }}</span>
     </div>
 
+    <!-- Admin Message Banner (Latest) -->
+    <div *ngIf="showMessageBanner && latestMessage" class="admin-message-banner" [ngClass]="'msg-type-' + latestMessage.message_type">
+      <div class="msg-banner-icon">
+        <svg *ngIf="latestMessage.message_type === 'info'" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        <svg *ngIf="latestMessage.message_type === 'warning'" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        <svg *ngIf="latestMessage.message_type === 'alert'" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      </div>
+      <div class="msg-banner-content">
+        <span class="msg-banner-sender">{{ latestMessage.sender_name }}</span>
+        <span class="msg-banner-text">{{ latestMessage.message }}</span>
+        <span class="msg-banner-time">{{ formatMessageTime(latestMessage.created_at) }}</span>
+      </div>
+      <button class="msg-banner-dismiss" (click)="dismissMessageBanner()" title="Dismiss">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Message Composer (Admin Only) -->
+    <div *ngIf="showMessageComposer && isAdmin" class="message-composer-overlay">
+      <div class="message-composer">
+        <div class="composer-header">
+          <h3>Broadcast Message</h3>
+          <button class="composer-close" (click)="toggleMessageComposer()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="composer-body">
+          <div class="composer-type-selector">
+            <label class="type-option" [class.selected]="adminMessageType === 'info'">
+              <input type="radio" name="msgType" value="info" [(ngModel)]="adminMessageType">
+              <span class="type-dot info-dot"></span> Info
+            </label>
+            <label class="type-option" [class.selected]="adminMessageType === 'warning'">
+              <input type="radio" name="msgType" value="warning" [(ngModel)]="adminMessageType">
+              <span class="type-dot warning-dot"></span> Warning
+            </label>
+            <label class="type-option" [class.selected]="adminMessageType === 'alert'">
+              <input type="radio" name="msgType" value="alert" [(ngModel)]="adminMessageType">
+              <span class="type-dot alert-dot"></span> Alert
+            </label>
+          </div>
+          <textarea
+            class="composer-textarea"
+            [(ngModel)]="newAdminMessage"
+            placeholder="Type your message to all participants..."
+            rows="3"
+            maxlength="500"
+            (keydown.control.enter)="sendAdminMessage()"
+          ></textarea>
+          <div class="composer-footer">
+            <span class="char-count">{{ newAdminMessage.length }}/500</span>
+            <button
+              class="composer-send-btn"
+              (click)="sendAdminMessage()"
+              [disabled]="isSendingMessage || !newAdminMessage.trim()">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              {{ isSendingMessage ? 'Sending...' : 'Send' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Message History Panel -->
+    <div *ngIf="showMessageHistory" class="message-history-overlay">
+      <div class="message-history">
+        <div class="history-header">
+          <h3>Admin Messages</h3>
+          <button class="composer-close" (click)="toggleMessageHistory()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="history-body">
+          <div *ngIf="adminMessages.length === 0" class="no-messages">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <p>No messages yet</p>
+          </div>
+          <div *ngFor="let msg of adminMessages" class="history-message" [ngClass]="'msg-type-' + msg.message_type">
+            <div class="history-msg-header">
+              <span class="history-msg-type-badge" [ngClass]="'badge-' + msg.message_type">{{ msg.message_type | uppercase }}</span>
+              <span class="history-msg-sender">{{ msg.sender_name }}</span>
+              <span class="history-msg-time">{{ formatMessageTime(msg.created_at) }}</span>
+            </div>
+            <p class="history-msg-text">{{ msg.message }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
   <div class="trading-main">
     <!-- Left Panel - Account & Order Entry -->
     <aside class="left-panel">
       <!-- Account Summary -->
-      <div class="account-summary" id="wt-account">
+      <div 
+      class="account-summary"
+      (mouseenter)="showHelp($event, 'This shows your cash balances')"
+      (mouseleave)="closeTooltip()"
+      >
         <div class="account-row">
           <span class="account-label">CASH</span>
           <div class="account-values">
@@ -477,19 +595,28 @@
       </div>
 
       <!-- Order Entry -->
-      <div class="order-entry" id="wt-order-entry">
-        <div class="symbol-display">{{ symbol }}</div>
+      <div 
+      class="order-entry">
+        <div 
+        class="symbol-display"
+        (mouseenter)="showHelp($event, 'The stock you are currently trading.')"
+        (mouseleave)="closeTooltip()"
+        >{{ symbol }}</div>
         
         <!-- Buy/Sell Toggle -->
         <div class="order-type-toggle">
           <button 
             class="type-btn buy-btn" 
+            (mouseenter)="showHelp($event, 'Click me to change to buying stocks.')"
+            (mouseleave)="closeTooltip()"
             [class.active]="orderType === 'buy'"
             (click)="setOrderType('buy')">
             BUY
           </button>
           <button 
-            class="type-btn sell-btn" 
+            class="type-btn sell-btn"
+            (mouseenter)="showHelp($event, 'Click me to change to selling stocks.')"
+            (mouseleave)="closeTooltip()" 
             [class.active]="orderType === 'sell'"
             (click)="setOrderType('sell')">
             SELL
@@ -497,7 +624,10 @@
         </div>
 
         <!-- Units Input -->
-        <div class="input-group">
+        <div class="input-group"
+        (mouseenter)="showHelp($event, 'You can change the number of stocks you want to buy or sell here.')"
+        (mouseleave)="closeTooltip()"
+        >
           <label class="input-label">UNITS</label>
           <div class="slider-container">
             <input 
@@ -526,7 +656,10 @@
         </div>
 
         <!-- Price Input -->
-        <div class="input-group">
+        <div class="input-group"
+        (mouseenter)="showHelp($event, 'You can change the price that you want to buy or sell at here.')"
+        (mouseleave)="closeTooltip()"
+        >
           <label class="input-label">PRICE</label>
           <div class="slider-container">
             <input 
@@ -559,6 +692,8 @@
         <!-- Place Order Button -->
         <button 
           class="place-order-btn"
+          (mouseenter)="showHelp($event, 'Click me to place your buy or sell orders.')"
+          (mouseleave)="closeTooltip()"
           [class.buy]="orderType === 'buy'"
           [class.sell]="orderType === 'sell'"
           [class.disabled-paused]="isPaused"
@@ -574,7 +709,11 @@
     <!-- Center Panel - Order Book & Trade History -->
     <main class="center-panel">
       <!-- Symbol Header -->
-      <div class="symbol-header" id="wt-stock-selector">
+      <div 
+      class="symbol-header"
+      (mouseenter)="showHelp($event, 'The current stock, click the arrows to change to a different stock.')"
+      (mouseleave)="closeTooltip()"
+      >
         <button class="nav-arrow" *ngIf="environmentStocks.length > 1" (click)="selectPrevStock()">‹</button>
         <span class="symbol-title">{{ symbol }}{{ selectedStock?.name ? ' - ' + selectedStock?.name : '' }}</span>
         <button class="nav-arrow" *ngIf="environmentStocks.length > 1" (click)="selectNextStock()">›</button>
@@ -583,26 +722,34 @@
       <!-- Tab Navigation -->
       <div class="tab-nav">
         <button 
-          class="tab-btn" 
+          class="tab-btn"
+          (mouseenter)="showHelp($event, 'Click me to go to the orderbook.')"
+          (mouseleave)="closeTooltip()" 
           [class.active]="activeTab === 'orderbook'"
           (click)="setActiveTab('orderbook')">
           ORDER BOOK
         </button>
         <button 
           class="tab-btn" 
+          (mouseenter)="showHelp($event, 'Click me to see the entire trade history of the current stock.')"
+          (mouseleave)="closeTooltip()"
           [class.active]="activeTab === 'history'"
           (click)="setActiveTab('history')">
           TRADE HISTORY
         </button>
         <button 
-          class="tab-btn" 
+          class="tab-btn"
+          (mouseenter)="showHelp($event, 'Click me view all your orders, both filled and unfilled.')"
+          (mouseleave)="closeTooltip()" 
           [class.active]="activeTab === 'myorders'"
           (click)="setActiveTab('myorders')">
           MY ORDERS
           <span *ngIf="getOpenOrdersCount() > 0" class="order-count">{{ getOpenOrdersCount() }}</span>
         </button>
         <button 
-          class="tab-btn" 
+          class="tab-btn"
+          (mouseenter)="showHelp($event, 'Click me to see a bigger graph that you can change the time span being shown.')"
+          (mouseleave)="closeTooltip()" 
           [class.active]="activeTab === 'graph'"
           (click)="setActiveTab('graph')">
           GRAPH
@@ -612,7 +759,11 @@
       <!-- Order Book View -->
       <div class="tab-content" *ngIf="activeTab === 'orderbook'">
         <!-- Price Chart (built from trades) -->
-        <div class="live-chart-card">
+        <div 
+        class="live-chart-card"
+        (mouseenter)="showHelp($event, 'A live chart showing you the prices the current stock is being sold at.')"
+        (mouseleave)="closeTooltip()"
+        >
           <div class="live-chart-title">
             <span>PRICE</span>
             <div class="live-chart-controls">
@@ -644,9 +795,13 @@
         <div class="orderbook-scroll">
 
         <!-- Asks (Sell Orders) - Displayed in reverse so lowest is at bottom -->
-        <div class="order-book asks">
+        <div 
+        class="order-book asks"
+        (mouseenter)="showHelp($event, 'All the stocks that are currently being sold and the price to buy it.<br>The stocks that you are selling have an orange dot on the right.')"
+        (mouseleave)="closeTooltip()"
+        >
           <div 
-            class="book-row ask" 
+            class="book-row ask"
             *ngFor="let ask of asks.slice().reverse()"
             (click)="setOrderPriceFromBook(ask.price)">
             <span class="col-units">{{ ask.units }}</span>
@@ -667,7 +822,11 @@
         </div>
 
         <!-- Bids (Buy Orders) -->
-        <div class="order-book bids">
+        <div 
+        class="order-book bids"
+        (mouseenter)="showHelp($event, 'All orders for the stock that are currently open.<br>Your buy orders have an orange dot on the right.')"
+        (mouseleave)="closeTooltip()" 
+        >
           <div 
             class="book-row bid" 
             *ngFor="let bid of bids"
@@ -687,7 +846,9 @@
 
       <!-- Trade History View -->
       <div class="tab-content" *ngIf="activeTab === 'history'">
-        <div class="trade-history">
+        <div class="trade-history"
+            (mouseenter)="showHelp($event, 'This shows you all of the trades that have happend with the current stock.<br>It tells you the time the trade occured, the price the trade happened at, and the number of stocks traded.')"
+            (mouseleave)="closeTooltip()">
           <div class="history-header">
             <span class="col-time">TIME</span>
             <span class="col-price">PRICE</span>
@@ -711,7 +872,9 @@
 
       <!-- My Orders View -->
       <div class="tab-content" *ngIf="activeTab === 'myorders'">
-        <div class="my-orders">
+        <div class="my-orders"
+            (mouseenter)="showHelp($event, 'This area shows all the trades that you have made or that are still outstanding. You can click the cancel button to remove any outstanding trades.')"
+            (mouseleave)="closeTooltip()">
           <div class="orders-header">
             <span class="col-type">TYPE</span>
             <span class="col-price">PRICE</span>
@@ -737,7 +900,9 @@
                 <button 
                   *ngIf="order.status === 'open' || order.status === 'partial'"
                   class="cancel-btn"
-                  (click)="cancelOrder(order)">
+                  (click)="cancelOrder(order)"
+                  (mouseenter)="showHelp($event, 'Click here to cancel the order.')"
+                  (mouseleave)="closeTooltip()">
                   Cancel
                 </button>
               </span>
@@ -750,7 +915,9 @@
       </div>
       <div class="tab-content" *ngIf="activeTab === 'graph'">
         <div class="graph-header">
-          <div class="time-range-selector">
+          <div class="time-range-selector"
+              (mouseenter)="showHelp($event, 'Here you can change the time range of the chart to view specifics.')"
+              (mouseleave)="closeTooltip()">
             <label for="timeRange">Time Range:</label>
             <select 
               id="timeRange" 
@@ -800,27 +967,37 @@
       <div class="market-stats">
         <h3 class="stats-title">Market Stats</h3>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The highest price someone will buy the stock for.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Best Bid</span>
           <span class="stat-value bid-color">{{ bestBid !== null ? formatCurrency(bestBid) : '-' }}</span>
         </div>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The highest price someone will sell the stock for.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Best Ask</span>
           <span class="stat-value ask-color">{{ bestAsk !== null ? formatCurrency(bestAsk) : '-' }}</span>
         </div>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The difference between the best bid and best ask.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Spread</span>
           <span class="stat-value">{{ spread !== null ? formatCurrency(spread) : '-' }}</span>
         </div>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The price of the last sold stock.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Last Price</span>
           <span class="stat-value highlight">{{ lastPrice !== null ? formatCurrency(lastPrice) : '-' }}</span>
         </div>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The total number of stocks that have been traded.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Total Trades</span>
           <span class="stat-value">{{ trades.length }}</span>
         </div>
@@ -829,17 +1006,23 @@
         
         <h3 class="stats-title">Your Position</h3>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The number of stocks you currently hold.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">{{ symbol }} Units</span>
           <span class="stat-value">{{ positionUnits }}</span>
         </div>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The ratio of stocks you have bought and the total amount you have spent on them.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Avg Price</span>
           <span class="stat-value">{{ positionAvgPrice > 0 ? formatCurrency(positionAvgPrice) : '-' }}</span>
         </div>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The value of all the stocks you hold.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">P&L</span>
           <span class="stat-value" [class.positive]="lastPrice && positionUnits > 0 && (lastPrice - positionAvgPrice) > 0" [class.negative]="lastPrice && positionUnits > 0 && (lastPrice - positionAvgPrice) < 0">
             {{ positionUnits > 0 && lastPrice ? formatCurrency((lastPrice - positionAvgPrice) * positionUnits) : '-' }}
@@ -850,7 +1033,9 @@
         
         <h3 class="stats-title">Environment Info</h3>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'This tells you if you are able to short the current stock.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Shorting</span>
           <span class="stat-value">{{ currentEnvironment?.allow_shorting ? 'Allowed' : 'Not Allowed' }}</span>
         </div>
@@ -860,12 +1045,16 @@
           <span class="stat-value">{{ currentEnvironment?.max_short_units }} units</span>
         </div>
         
-        <div class="stat-item">
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The number of different stocks in the market.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Stocks</span>
           <span class="stat-value">{{ environmentStocks.length }}</span>
         </div>
         
-        <div class="stat-item" *ngIf="isAdmin">
+        <div class="stat-item" *ngIf="isAdmin"
+        (mouseenter)="showHelp($event, 'You are the admin for this market simulation.')"
+        (mouseleave)="closeTooltip()">
           <span class="stat-label">Role</span>
           <span class="stat-value admin-badge">Admin</span>
         </div>
@@ -873,4 +1062,13 @@
     </aside>
   </div>
   </ng-container>
+</div>
+
+<div *ngIf="activeTooltip"
+     class="tooltip"
+     [ngClass]="{'tooltip-left': activeTooltip.position === 'left', 'tooltip-right': activeTooltip.position === 'right'}"
+     [style.top.px]="activeTooltip.y"
+     [style.left.px]="activeTooltip.x"
+     [innerHTML]="activeTooltip.text"
+     (click)="closeTooltip()">
 </div>

@@ -170,6 +170,16 @@ export interface DbEnvironmentTrade {
   stock?: DbEnvironmentStock;
 }
 
+export interface DbEnvironmentMessage {
+  id: string;
+  market_id: string;
+  sender_id: string;
+  message: string;
+  message_type: 'info' | 'warning' | 'alert';
+  sender_name: string;
+  created_at: string;
+}
+
 // Create environment input
 export interface CreateEnvironmentInput {
   name: string;
@@ -205,6 +215,7 @@ export class SupabaseService {
   private environmentChannel: RealtimeChannel | null = null;
   private envOrdersChannel: RealtimeChannel | null = null;
   private envTradesChannel: RealtimeChannel | null = null;
+  private envMessagesChannel: RealtimeChannel | null = null;
 
   // Real-time subjects
   private ordersSubject = new BehaviorSubject<DbOrder[]>([]);
@@ -700,6 +711,10 @@ export class SupabaseService {
     if (this.envTradesChannel) {
       this.supabase.removeChannel(this.envTradesChannel);
       this.envTradesChannel = null;
+    }
+    if (this.envMessagesChannel) {
+      this.supabase.removeChannel(this.envMessagesChannel);
+      this.envMessagesChannel = null;
     }
   }
 
@@ -1564,6 +1579,81 @@ export class SupabaseService {
           const trades = await this.getEnvironmentTrades(environmentId, stockId);
           this.envTradesSubject.next(trades);
           callback(trades);
+        }
+      )
+      .subscribe();
+  }
+
+  // ==================== ADMIN MESSAGE OPERATIONS ====================
+
+  /**
+   * Send an admin message to all participants in an environment
+   */
+  async sendAdminMessage(
+    environmentId: string,
+    senderId: string,
+    senderName: string,
+    message: string,
+    messageType: 'info' | 'warning' | 'alert' = 'info'
+  ): Promise<DbEnvironmentMessage> {
+    const { data, error } = await this.supabase
+      .from('environment_messages')
+      .insert({
+        market_id: environmentId,
+        sender_id: senderId,
+        message: message.trim(),
+        message_type: messageType,
+        sender_name: senderName,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as DbEnvironmentMessage;
+  }
+
+  /**
+   * Get all messages for an environment (most recent first)
+   */
+  async getEnvironmentMessages(environmentId: string, limit: number = 50): Promise<DbEnvironmentMessage[]> {
+    const { data, error } = await this.supabase
+      .from('environment_messages')
+      .select('*')
+      .eq('market_id', environmentId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return (data || []) as DbEnvironmentMessage[];
+  }
+
+  /**
+   * Subscribe to new admin messages for an environment
+   */
+  subscribeToEnvironmentMessages(environmentId: string, callback: (messages: DbEnvironmentMessage[]) => void): void {
+    if (this.envMessagesChannel) {
+      this.supabase.removeChannel(this.envMessagesChannel);
+    }
+
+    // Initial load
+    this.getEnvironmentMessages(environmentId).then(messages => {
+      callback(messages);
+    });
+
+    // Subscribe to new messages
+    this.envMessagesChannel = this.supabase
+      .channel(`env_messages:${environmentId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'environment_messages',
+          filter: `market_id=eq.${environmentId}`
+        },
+        async () => {
+          const messages = await this.getEnvironmentMessages(environmentId);
+          callback(messages);
         }
       )
       .subscribe();

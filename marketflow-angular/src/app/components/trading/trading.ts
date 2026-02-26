@@ -16,6 +16,7 @@ import {
   DbEnvironmentPosition,
   DbEnvironmentOrder,
   DbEnvironmentTrade,
+  DbEnvironmentMessage,
   CreateEnvironmentInput,
   CreateStockInput,
 } from '../../services/supabase.service';
@@ -27,6 +28,8 @@ import {
   ChartConfiguration,
 } from 'chart.js';
 Chart.register(...registerables);
+
+import { HelpModeService } from '../../services/help-mode.service';
 
 interface OrderBookEntry {
   price: number;
@@ -111,6 +114,17 @@ export class Trading implements OnInit, OnDestroy {
   environmentOrders: DbEnvironmentOrder[] = [];
   environmentTrades: DbEnvironmentTrade[] = [];
   myEnvironmentOrders: DbEnvironmentOrder[] = [];
+
+  // Admin messages
+  adminMessages: DbEnvironmentMessage[] = [];
+  latestMessage: DbEnvironmentMessage | null = null;
+  showMessageBanner: boolean = false;
+  showMessageComposer: boolean = false;
+  showMessageHistory: boolean = false;
+  newAdminMessage: string = '';
+  adminMessageType: 'info' | 'warning' | 'alert' = 'info';
+  isSendingMessage: boolean = false;
+  dismissedMessageIds: Set<string> = new Set();
 
   // Environment lists for selection
   publicEnvironments: DbTradingEnvironment[] = [];
@@ -302,10 +316,16 @@ export class Trading implements OnInit, OnDestroy {
   usernameInput: string = '';
   isLoggingIn: boolean = false;
 
+  // Tooltip information
+  helpMode: boolean = false;
+
+  activeTooltip: { text: string; x: number; y: number; position?: 'left' | 'right' } | null = null;
+
   constructor(
     private router: Router,
     private supabaseService: SupabaseService,
     private tradingContextService: TradingContextService,
+    private helpModeService: HelpModeService,
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -856,6 +876,109 @@ export class Trading implements OnInit, OnDestroy {
         }
       },
     );
+
+    // Subscribe to admin messages
+    this.supabaseService.subscribeToEnvironmentMessages(
+      this.environmentId,
+      (messages) => {
+        const previousLatest = this.adminMessages.length > 0 ? this.adminMessages[0]?.id : null;
+        this.adminMessages = messages;
+
+        // Show banner for new messages
+        if (messages.length > 0 && messages[0].id !== previousLatest) {
+          this.latestMessage = messages[0];
+          if (!this.dismissedMessageIds.has(messages[0].id)) {
+            this.showMessageBanner = true;
+          }
+        }
+      },
+    );
+  }
+
+  // ==================== ADMIN MESSAGE METHODS ====================
+
+  /**
+   * Send an admin message to all participants
+   */
+  async sendAdminMessage(): Promise<void> {
+    if (!this.newAdminMessage.trim() || !this.participantId || !this.environmentId) return;
+    if (!this.isAdmin) return;
+
+    this.isSendingMessage = true;
+    try {
+      await this.supabaseService.sendAdminMessage(
+        this.environmentId,
+        this.participantId,
+        this.traderUsername,
+        this.newAdminMessage,
+        this.adminMessageType,
+      );
+      this.newAdminMessage = '';
+      this.adminMessageType = 'info';
+      this.showMessageComposer = false;
+    } catch (error: any) {
+      console.error('Failed to send admin message:', error);
+    } finally {
+      this.isSendingMessage = false;
+    }
+  }
+
+  /**
+   * Dismiss the latest message banner
+   */
+  dismissMessageBanner(): void {
+    if (this.latestMessage) {
+      this.dismissedMessageIds.add(this.latestMessage.id);
+    }
+    this.showMessageBanner = false;
+  }
+
+  /**
+   * Toggle the message composer panel
+   */
+  toggleMessageComposer(): void {
+    this.showMessageComposer = !this.showMessageComposer;
+    if (this.showMessageComposer) {
+      this.showMessageHistory = false;
+    }
+  }
+
+  /**
+   * Toggle the message history panel
+   */
+  toggleMessageHistory(): void {
+    this.showMessageHistory = !this.showMessageHistory;
+    if (this.showMessageHistory) {
+      this.showMessageComposer = false;
+      // Mark all current messages as read
+      this.adminMessages.forEach(m => this.dismissedMessageIds.add(m.id));
+      this.showMessageBanner = false;
+    }
+  }
+
+  /**
+   * Format a message timestamp for display
+   */
+  formatMessageTime(dateStr: string): string {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  /**
+   * Get unread message count (messages not dismissed)
+   */
+  getUnreadMessageCount(): number {
+    return this.adminMessages.filter(m => !this.dismissedMessageIds.has(m.id)).length;
   }
 
   /**
@@ -1628,6 +1751,12 @@ export class Trading implements OnInit, OnDestroy {
    * Set active tab
    */
   setActiveTab(tab: 'orderbook' | 'history' | 'myorders' | 'graph'): void {
+    if (this.activeTab === 'graph' && tab !== 'graph') {
+      if (this.priceChart) {
+        this.priceChart.destroy();
+        this.priceChart = null;
+      }
+    }
     this.activeTab = tab;
 
     if (tab === 'graph') {
@@ -1751,39 +1880,35 @@ export class Trading implements OnInit, OnDestroy {
 
     const prices = sortedTrades.map((t) => Number(t.price));
 
-    // Destroy existing chart if it exists
-    if (this.priceChart) {
-      this.priceChart.destroy();
+    if (!this.priceChart) {
+      this.priceChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: this.symbol,
+              data: prices,
+              borderColor: 'red',
+              backgroundColor: 'rgba(37, 99, 235, 0.1)',
+              tension: 0.25,
+              pointRadius: 0, // perf boost
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+        },
+      });
+
+      return;
     }
 
-    this.priceChart = new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: this.symbol,
-            data: prices,
-            borderColor: 'red',
-            backgroundColor: 'rgba(37, 99, 235, 0.1)',
-            tension: 0.25,
-            pointRadius: 3,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: {
-            title: { display: true, text: 'Time' },
-          },
-          y: {
-            title: { display: true, text: 'Price' },
-          },
-        },
-      },
-    });
+    this.priceChart.data.labels = labels;
+    this.priceChart.data.datasets[0].data = prices;
+    this.priceChart.update('none');
   }
 
   shortId(id: string): string {
@@ -1828,5 +1953,40 @@ export class Trading implements OnInit, OnDestroy {
     } catch (error) {
       console.warn('Copy to clipboard failed:', error);
     }
+  }
+
+  toggleHelpMode(): void {
+    this.helpMode = !this.helpMode;
+    this.activeTooltip = null;
+  }
+
+  showHelp(event: MouseEvent, text: string): void {
+    if (!this.helpMode) return; 
+    const tooltipWidth = 250;
+    const tooltipHeight = 100;
+    const padding = 10;
+
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    // Horizontal position
+    let x = event.clientX + padding;
+    let position: 'left' | 'right' = 'right';
+    if (event.clientX + tooltipWidth + padding > viewportWidth) {
+      x = event.clientX - tooltipWidth - padding;
+      position = 'left';
+    }
+
+    // Vertical position
+    let y = event.clientY + padding;
+    if (event.clientY + tooltipHeight + padding > viewportHeight) {
+      y = Math.max(padding, event.clientY - tooltipHeight - padding);
+    }
+
+    this.activeTooltip = { text, x, y, position };
+  }
+
+  closeTooltip(): void {
+    this.activeTooltip = null;
   }
 }
