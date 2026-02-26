@@ -16,6 +16,7 @@ import {
   DbEnvironmentPosition,
   DbEnvironmentOrder,
   DbEnvironmentTrade,
+  DbEnvironmentMessage,
   CreateEnvironmentInput,
   CreateStockInput,
 } from '../../services/supabase.service';
@@ -113,6 +114,17 @@ export class Trading implements OnInit, OnDestroy {
   environmentOrders: DbEnvironmentOrder[] = [];
   environmentTrades: DbEnvironmentTrade[] = [];
   myEnvironmentOrders: DbEnvironmentOrder[] = [];
+
+  // Admin messages
+  adminMessages: DbEnvironmentMessage[] = [];
+  latestMessage: DbEnvironmentMessage | null = null;
+  showMessageBanner: boolean = false;
+  showMessageComposer: boolean = false;
+  showMessageHistory: boolean = false;
+  newAdminMessage: string = '';
+  adminMessageType: 'info' | 'warning' | 'alert' = 'info';
+  isSendingMessage: boolean = false;
+  dismissedMessageIds: Set<string> = new Set();
 
   // Environment lists for selection
   publicEnvironments: DbTradingEnvironment[] = [];
@@ -864,6 +876,109 @@ export class Trading implements OnInit, OnDestroy {
         }
       },
     );
+
+    // Subscribe to admin messages
+    this.supabaseService.subscribeToEnvironmentMessages(
+      this.environmentId,
+      (messages) => {
+        const previousLatest = this.adminMessages.length > 0 ? this.adminMessages[0]?.id : null;
+        this.adminMessages = messages;
+
+        // Show banner for new messages
+        if (messages.length > 0 && messages[0].id !== previousLatest) {
+          this.latestMessage = messages[0];
+          if (!this.dismissedMessageIds.has(messages[0].id)) {
+            this.showMessageBanner = true;
+          }
+        }
+      },
+    );
+  }
+
+  // ==================== ADMIN MESSAGE METHODS ====================
+
+  /**
+   * Send an admin message to all participants
+   */
+  async sendAdminMessage(): Promise<void> {
+    if (!this.newAdminMessage.trim() || !this.participantId || !this.environmentId) return;
+    if (!this.isAdmin) return;
+
+    this.isSendingMessage = true;
+    try {
+      await this.supabaseService.sendAdminMessage(
+        this.environmentId,
+        this.participantId,
+        this.traderUsername,
+        this.newAdminMessage,
+        this.adminMessageType,
+      );
+      this.newAdminMessage = '';
+      this.adminMessageType = 'info';
+      this.showMessageComposer = false;
+    } catch (error: any) {
+      console.error('Failed to send admin message:', error);
+    } finally {
+      this.isSendingMessage = false;
+    }
+  }
+
+  /**
+   * Dismiss the latest message banner
+   */
+  dismissMessageBanner(): void {
+    if (this.latestMessage) {
+      this.dismissedMessageIds.add(this.latestMessage.id);
+    }
+    this.showMessageBanner = false;
+  }
+
+  /**
+   * Toggle the message composer panel
+   */
+  toggleMessageComposer(): void {
+    this.showMessageComposer = !this.showMessageComposer;
+    if (this.showMessageComposer) {
+      this.showMessageHistory = false;
+    }
+  }
+
+  /**
+   * Toggle the message history panel
+   */
+  toggleMessageHistory(): void {
+    this.showMessageHistory = !this.showMessageHistory;
+    if (this.showMessageHistory) {
+      this.showMessageComposer = false;
+      // Mark all current messages as read
+      this.adminMessages.forEach(m => this.dismissedMessageIds.add(m.id));
+      this.showMessageBanner = false;
+    }
+  }
+
+  /**
+   * Format a message timestamp for display
+   */
+  formatMessageTime(dateStr: string): string {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  /**
+   * Get unread message count (messages not dismissed)
+   */
+  getUnreadMessageCount(): number {
+    return this.adminMessages.filter(m => !this.dismissedMessageIds.has(m.id)).length;
   }
 
   /**
