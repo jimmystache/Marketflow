@@ -1,356 +1,334 @@
 import { Injectable } from '@angular/core';
 import { SupabaseService } from './supabase.service';
+import { OrderExecutionService } from './order-execution.service';
+
+/**
+ * Each bot maintains a two-sided quote (bid + ask) around the current
+ * market mid-price, behaving as a market maker.  The spread width and
+ * random price perturbation are governed by the volatility setting so
+ * the resulting price series has realistic dynamics.
+ */
+
+interface BotQuote {
+  bidOrderId: string | null;
+  askOrderId: string | null;
+}
 
 interface BotState {
   traderId: string;
   participantId: string;
   username: string;
-  personality: {
-    name: string;
-    aggression: number;
-    cancel: number;
-    avgUnits: number;
-    bigChance: number;
-  };
-  nextActionAt: number;
-  burstUntil: number;
-  pauseUntil: number;
-  recentOrderIds: string[];
+  /** How wide this bot quotes relative to the base half-spread */
+  spreadMultiplier: number;
+  /** Typical quote size in units */
+  quoteSize: number;
+  /** Current live orders */
+  quote: BotQuote;
+  /** Net inventory accumulated through fills (positive = long) */
+  inventory: number;
 }
 
+/** Volatility profile that controls price dynamics and spread */
+interface VolatilityProfile {
+  /** Per-tick std-dev of mid-price random walk */
+  tickSigma: number;
+  /** Base half-spread (each bot multiplies by its own factor) */
+  baseHalfSpread: number;
+  /** Probability of a "news shock" per tick */
+  shockProb: number;
+  /** Std-dev of the shock jump */
+  shockSigma: number;
+  /** How aggressively bots skew quotes to shed inventory ($/unit) */
+  inventorySkewPerUnit: number;
+  /** Max random jitter added per side */
+  jitter: number;
+}
+
+const VOLATILITY_PROFILES: Record<string, VolatilityProfile> = {
+  normal: {
+    tickSigma: 0.02,
+    baseHalfSpread: 0.08,
+    shockProb: 0.003,
+    shockSigma: 0.40,
+    inventorySkewPerUnit: 0.005,
+    jitter: 0.03,
+  },
+  high: {
+    tickSigma: 0.08,
+    baseHalfSpread: 0.15,
+    shockProb: 0.010,
+    shockSigma: 1.20,
+    inventorySkewPerUnit: 0.010,
+    jitter: 0.06,
+  },
+  extreme: {
+    tickSigma: 0.20,
+    baseHalfSpread: 0.30,
+    shockProb: 0.025,
+    shockSigma: 3.00,
+    inventorySkewPerUnit: 0.020,
+    jitter: 0.12,
+  },
+};
+
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class BotSimulationService {
   private isRunning = false;
-  private intervalHandle: any = null;
+  private timeoutHandle: any = null;
   private bots: BotState[] = [];
-  private currentMid = 100; // Starting mid price
-  private volatility = 0.25;
-  private spread = 0.25;
 
-  constructor(private supabaseService: SupabaseService) {}
+  /** Current mid-price the bots quote around */
+  private mid = 100;
+  private profile: VolatilityProfile = VOLATILITY_PROFILES['normal'];
 
-  /**
-   * Start a bot simulation
-   */
+  constructor(
+    private supabaseService: SupabaseService,
+    private orderExecutionService: OrderExecutionService,
+  ) {}
+
+  // ────────────────────── public API ──────────────────────
+
   async startSimulation(
     environmentId: string,
     stockId: string,
     volatility: 'normal' | 'high' | 'extreme',
     durationSeconds: number,
-    numberOfBots: number = 5
+    numberOfBots: number = 5,
   ): Promise<{ success: boolean; message: string }> {
     if (this.isRunning) {
       return { success: false, message: 'Simulation already running' };
     }
 
-    // Set volatility level
-    this.volatility = volatility === 'extreme' ? 3.00 : volatility === 'high' ? 0.65 : 0.25;
-    this.spread = 0.50;
+    this.profile = VOLATILITY_PROFILES[volatility] ?? VOLATILITY_PROFILES['normal'];
 
     try {
-      // Initialize bots
       await this.initializeBots(environmentId, stockId, numberOfBots);
-
-      // Start simulation loop
       this.isRunning = true;
-      const startTime = Date.now();
-      const endTime = startTime + (durationSeconds * 1000);
-
-      this.runSimulationLoop(environmentId, stockId, endTime);
-
-      return { 
-        success: true, 
-        message: `Simulation started with ${numberOfBots} bots, ${volatility} volatility for ${durationSeconds}s`
+      const endTime = Date.now() + durationSeconds * 1000;
+      this.scheduleNextTick(environmentId, stockId, endTime);
+      return {
+        success: true,
+        message: `Market-maker simulation started: ${numberOfBots} bots, ${volatility} volatility, ${durationSeconds}s`,
       };
     } catch (error: any) {
-      return { 
-        success: false, 
-        message: `Failed to start simulation: ${error.message}`
-      };
+      this.isRunning = false;
+      return { success: false, message: `Failed to start simulation: ${error.message}` };
     }
   }
 
-  /**
-   * Stop the current simulation
-   */
   stopSimulation(): void {
-    if (this.intervalHandle) {
-      clearInterval(this.intervalHandle);
-      this.intervalHandle = null;
-    }
     this.isRunning = false;
+    if (this.timeoutHandle) {
+      clearTimeout(this.timeoutHandle);
+      this.timeoutHandle = null;
+    }
     this.bots = [];
   }
 
-  /**
-   * Check if simulation is running
-   */
   isSimulationRunning(): boolean {
     return this.isRunning;
   }
 
-  /**
-   * Initialize bot traders and participants
-   */
-  private async initializeBots(environmentId: string, stockId: string, count: number): Promise<void> {
-    const personalities = [
-      { name: 'scalper', aggression: 0.8, cancel: 0.18, avgUnits: 4, bigChance: 0.01 },
-      { name: 'maker', aggression: 0.35, cancel: 0.08, avgUnits: 6, bigChance: 0.02 },
-      { name: 'swing', aggression: 0.2, cancel: 0.05, avgUnits: 10, bigChance: 0.05 }
-    ];
+  // ────────────────────── initialisation ──────────────────────
 
+  private async initializeBots(
+    environmentId: string,
+    stockId: string,
+    count: number,
+  ): Promise<void> {
     const environment = await this.supabaseService.getEnvironment(environmentId);
     if (!environment) throw new Error('Environment not found');
+
+    // Seed mid from the most recent trade, or the stock's starting price
+    const trades = await this.supabaseService.getEnvironmentTrades(environmentId, stockId);
+    if (trades.length > 0) {
+      this.mid = Number(trades[0].price);
+    } else {
+      const stock = await this.supabaseService.getEnvironmentStock(stockId);
+      this.mid = stock ? Number(stock.starting_price) : 100;
+    }
+
+    // Each bot gets a different spread multiplier / quote size
+    // so the book has depth at multiple price levels.
+    const presets = [
+      { spreadMultiplier: 0.8, quoteSize: 3 },
+      { spreadMultiplier: 1.0, quoteSize: 5 },
+      { spreadMultiplier: 1.2, quoteSize: 8 },
+      { spreadMultiplier: 1.5, quoteSize: 4 },
+      { spreadMultiplier: 2.0, quoteSize: 6 },
+    ];
 
     this.bots = [];
 
     for (let i = 0; i < count; i++) {
       const username = `BOT_${String(i + 1).padStart(2, '0')}`;
-      
-      // Get or create trader
+
       const trader = await this.supabaseService.getOrCreateTrader(username);
       if (!trader) throw new Error(`Failed to create trader ${username}`);
 
-      // Get or create participant
       const participant = await this.supabaseService.getOrCreateParticipant(
         environmentId,
         trader.id,
-        environment.starting_cash || 10000
+        environment.starting_cash || 10000,
       );
       if (!participant) throw new Error(`Failed to create participant for ${username}`);
 
-      // Ensure position exists
       await this.supabaseService.getOrCreateEnvironmentPosition(
         environmentId,
         participant.id,
         stockId,
-        environment.starting_shares || 100
+        environment.starting_shares || 100,
       );
+
+      const preset = presets[i % presets.length];
 
       this.bots.push({
         traderId: trader.id,
         participantId: participant.id,
         username,
-        personality: personalities[i % personalities.length],
-        nextActionAt: Date.now() + this.randomInt(500, 2000),
-        burstUntil: 0,
-        pauseUntil: 0,
-        recentOrderIds: []
+        spreadMultiplier: preset.spreadMultiplier,
+        quoteSize: preset.quoteSize,
+        quote: { bidOrderId: null, askOrderId: null },
+        inventory: 0,
       });
     }
 
-    console.log(`✓ Initialized ${count} bots`);
+    console.log(`✓ Initialised ${count} market-maker bots, mid = ${this.mid.toFixed(2)}`);
   }
 
-  /**
-   * Main simulation loop
-   */
-  private runSimulationLoop(environmentId: string, stockId: string, endTime: number): void {
-    this.intervalHandle = setInterval(async () => {
-      const now = Date.now();
+  // ────────────────────── tick loop ──────────────────────
 
-      // Check if simulation should end
-      if (now >= endTime) {
-        this.stopSimulation();
-        console.log('🤖 Bot simulation completed');
-        return;
-      }
-
-      // Update market regime (volatility, drift)
-      this.updateMarketRegime();
-
-      // Process each bot
-      for (const bot of this.bots) {
-        if (now < bot.nextActionAt || now < bot.pauseUntil) continue;
-
-        // Burst/pause logic
-        if (bot.burstUntil === 0 && Math.random() < 0.06) {
-          bot.burstUntil = now + this.randomInt(6000, 18000);
-        }
-        if (bot.pauseUntil === 0 && Math.random() < 0.03) {
-          bot.pauseUntil = now + this.randomInt(4000, 14000);
-          bot.burstUntil = 0;
-          continue;
-        }
-        if (bot.burstUntil > 0 && now > bot.burstUntil) bot.burstUntil = 0;
-        if (bot.pauseUntil > 0 && now > bot.pauseUntil) bot.pauseUntil = 0;
-
-        const actionDelay = bot.burstUntil > 0 
-          ? this.randomInt(180, 700) 
-          : this.randomInt(500, 1800);
-        bot.nextActionAt = now + actionDelay;
-
-        // Occasionally cancel old orders
-        if (Math.random() < 0.1 * bot.personality.cancel) {
-          await this.tryCancelRandomOrder(bot);
-          continue;
-        }
-
-        // Place new order
-        await this.placeRandomOrder(environmentId, stockId, bot);
-      }
-    }, 350); // Run every 350ms
+  private scheduleNextTick(environmentId: string, stockId: string, endTime: number): void {
+    const delay = 600 + Math.floor(Math.random() * 800);
+    this.timeoutHandle = setTimeout(
+      () => this.runTick(environmentId, stockId, endTime),
+      delay,
+    );
   }
 
-  /**
-   * Update market price with volatility
-   */
-  private updateMarketRegime(): void {
-    // Drift
-    const drift = (Math.random() - 0.5) * 0.02;
-    this.currentMid += drift;
+  private async runTick(
+    environmentId: string,
+    stockId: string,
+    endTime: number,
+  ): Promise<void> {
+    if (!this.isRunning) return;
 
-    // Volatility shock
-    if (Math.random() < this.volatility * 0.01) {
-      const shock = (Math.random() - 0.5) * this.volatility * 2;
-      this.currentMid += shock;
+    if (Date.now() >= endTime) {
+      this.stopSimulation();
+      console.log('🤖 Market-maker simulation completed');
+      return;
     }
 
-    // Keep price reasonable
-    this.currentMid = Math.max(0.1, Math.min(10000, this.currentMid));
+    // 1. Evolve the mid-price (random walk + shocks)
+    this.evolveMidPrice();
+
+    // 2. Each bot cancels stale quotes and places a fresh two-sided quote
+    for (const bot of this.bots) {
+      await this.requoteBot(environmentId, stockId, bot);
+    }
+
+    this.scheduleNextTick(environmentId, stockId, endTime);
   }
 
+  // ────────────────────── mid-price dynamics ──────────────────────
+
   /**
-   * Place a random order for a bot
+   * Gaussian random walk with occasional news shocks.
+   * Uses Box-Muller for approximately normal increments.
    */
-  private async placeRandomOrder(environmentId: string, stockId: string, bot: BotState): Promise<void> {
+  private evolveMidPrice(): void {
+    const p = this.profile;
+
+    // Normal tick noise
+    const z = this.gaussianRandom();
+    this.mid += z * p.tickSigma;
+
+    // Occasional shock
+    if (Math.random() < p.shockProb) {
+      this.mid += this.gaussianRandom() * p.shockSigma;
+    }
+
+    this.mid = Math.max(0.01, this.mid);
+  }
+
+  /** Box-Muller transform → standard normal sample */
+  private gaussianRandom(): number {
+    const u1 = Math.random() || 1e-10;
+    const u2 = Math.random();
+    return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  }
+
+  // ────────────────────── quoting ──────────────────────
+
+  /**
+   * Cancel any previous quote and place a new bid + ask around the mid.
+   *
+   * Prices incorporate:
+   * - base half-spread × bot's spread multiplier
+   * - inventory skew  (long → lower prices to attract sells)
+   * - random jitter   (so levels don't stack exactly)
+   */
+  private async requoteBot(
+    environmentId: string,
+    stockId: string,
+    bot: BotState,
+  ): Promise<void> {
+    // Cancel previous quotes (fire-and-forget, may already be filled)
+    await this.cancelQuote(bot);
+
+    const p = this.profile;
+    const halfSpread = p.baseHalfSpread * bot.spreadMultiplier;
+    const skew = bot.inventory * p.inventorySkewPerUnit;
+    const bidJitter = Math.random() * p.jitter;
+    const askJitter = Math.random() * p.jitter;
+
+    const rawBid = this.mid - halfSpread - bidJitter - skew;
+    const rawAsk = this.mid + halfSpread + askJitter - skew;
+
+    const bidPrice = Math.max(0.01, +rawBid.toFixed(2));
+    const askPrice = Math.max(bidPrice + 0.01, +rawAsk.toFixed(2));
+
+    const units = Math.max(1, bot.quoteSize + Math.floor((Math.random() - 0.5) * 4));
+
+    // Place bid
     try {
-      const side = Math.random() < 0.5 ? 'buy' : 'sell';
-      const personality = bot.personality;
-
-      // Size: mostly small, occasionally large
-      const big = Math.random() < personality.bigChance;
-      const units = big 
-        ? this.randomInt(25, 90) 
-        : this.clamp(Math.round(this.randomBetween(1, personality.avgUnits * 2.5)), 1, 50);
-
-      // Price: near mid with some spread
-      const skew = (Math.random() - 0.5) * this.spread;
-      const away = Math.abs(skew) + this.randomBetween(0.05, this.spread * 1.3);
-      let price = side === 'buy' 
-        ? this.currentMid - away * (personality.aggression > 0.6 ? 0.6 : 1.0)
-        : this.currentMid + away * (personality.aggression > 0.6 ? 0.6 : 1.0);
-
-      price = Number(this.clamp(price, 0.01, 100000).toFixed(2));
-
-      // Place order
-      const order = await this.supabaseService.placeEnvironmentOrder({
-        market_id: environmentId,
-        stock_id: stockId,
-        participant_id: bot.participantId,
-        type: side,
-        price,
-        units,
-        filled_units: 0,
-        status: 'open'
-      });
-
-      if (order) {
-        bot.recentOrderIds.unshift(order.id);
-        bot.recentOrderIds = bot.recentOrderIds.slice(0, 30);
+      const bidResult = await this.orderExecutionService.placeAndExecuteOrder(
+        environmentId, bot.participantId, stockId, 'buy', bidPrice, units,
+      );
+      if (bidResult.success && bidResult.order) {
+        bot.quote.bidOrderId = bidResult.order.id;
+        if (bidResult.tradesExecuted && bidResult.tradesExecuted > 0) {
+          bot.inventory += units;
+          this.mid = bidPrice; // price discovery
+        }
       }
+    } catch { /* validation failure — skip */ }
 
-      // Try to match orders immediately
-      if (Math.random() < 0.3) {
-        await this.tryMatchOrders(environmentId, stockId);
-      }
-    } catch (error) {
-      // Silently handle errors to keep simulation running
-      console.error('Bot order error:', error);
-    }
-  }
-
-  /**
-   * Try to match crossing orders
-   */
-  private async tryMatchOrders(environmentId: string, stockId: string): Promise<void> {
+    // Place ask
     try {
-      const orders = await this.supabaseService.getEnvironmentOpenOrders(environmentId, stockId);
-      const buyOrders = orders.filter(o => o.type === 'buy').sort((a, b) => b.price - a.price);
-      const sellOrders = orders.filter(o => o.type === 'sell').sort((a, b) => a.price - b.price);
-
-      if (buyOrders.length === 0 || sellOrders.length === 0) return;
-
-      const bestBid = buyOrders[0];
-      const bestAsk = sellOrders[0];
-
-      // Check if orders cross
-      if (bestBid.price >= bestAsk.price) {
-        const matchPrice = Number(((bestBid.price + bestAsk.price) / 2).toFixed(2));
-        const matchUnits = Math.min(
-          bestBid.units - bestBid.filled_units,
-          bestAsk.units - bestAsk.filled_units
-        );
-
-        // Record trade
-        const trade = await this.supabaseService.recordEnvironmentTrade({
-          market_id: environmentId,
-          stock_id: stockId,
-          buy_order_id: bestBid.id,
-          sell_order_id: bestAsk.id,
-          buyer_participant_id: bestBid.participant_id,
-          seller_participant_id: bestAsk.participant_id,
-          price: matchPrice,
-          units: matchUnits
-        });
-        
-        // if (trade) {
-        //   console.log('🤖 Bot trade recorded:', {
-        //     price: matchPrice,
-        //     units: matchUnits,
-        //     market_id: environmentId,
-        //     trade_id: trade.id
-        //   });
-        // }
-
-        // Update orders
-        const buyNewFilled = bestBid.filled_units + matchUnits;
-        const sellNewFilled = bestAsk.filled_units + matchUnits;
-
-        await this.supabaseService.updateEnvironmentOrder(bestBid.id, {
-          filled_units: buyNewFilled,
-          status: buyNewFilled >= bestBid.units ? 'filled' : 'partial'
-        });
-
-        await this.supabaseService.updateEnvironmentOrder(bestAsk.id, {
-          filled_units: sellNewFilled,
-          status: sellNewFilled >= bestAsk.units ? 'filled' : 'partial'
-        });
-
-        // Update mid price
-        this.currentMid = matchPrice;
+      const askResult = await this.orderExecutionService.placeAndExecuteOrder(
+        environmentId, bot.participantId, stockId, 'sell', askPrice, units,
+      );
+      if (askResult.success && askResult.order) {
+        bot.quote.askOrderId = askResult.order.id;
+        if (askResult.tradesExecuted && askResult.tradesExecuted > 0) {
+          bot.inventory -= units;
+          this.mid = askPrice; // price discovery
+        }
       }
-    } catch (error) {
-      console.error('Match orders error:', error);
+    } catch { /* validation failure — skip */ }
+  }
+
+  private async cancelQuote(bot: BotState): Promise<void> {
+    const ids = [bot.quote.bidOrderId, bot.quote.askOrderId].filter(Boolean) as string[];
+    for (const id of ids) {
+      try {
+        await this.supabaseService.cancelEnvironmentOrder(id);
+      } catch { /* already filled or cancelled */ }
     }
-  }
-
-  /**
-   * Try to cancel a random order for a bot
-   */
-  private async tryCancelRandomOrder(bot: BotState): Promise<void> {
-    if (bot.recentOrderIds.length === 0) return;
-
-    try {
-      const orderId = bot.recentOrderIds[this.randomInt(0, bot.recentOrderIds.length - 1)];
-      await this.supabaseService.cancelEnvironmentOrder(orderId);
-    } catch (error) {
-      // Ignore errors (order may already be filled/cancelled)
-    }
-  }
-
-  // Utility functions
-  private randomBetween(min: number, max: number): number {
-    return min + Math.random() * (max - min);
-  }
-
-  private randomInt(min: number, max: number): number {
-    return Math.floor(this.randomBetween(min, max + 1));
-  }
-
-  private clamp(n: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, n));
+    bot.quote.bidOrderId = null;
+    bot.quote.askOrderId = null;
   }
 }

@@ -22,7 +22,7 @@
       </div>
 
       <!-- Feature Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <!-- Trading Simulator -->
         <card
           title="Trading Simulator"
@@ -34,29 +34,11 @@
 
         <!-- Environment Setup -->
         <card
-          title="Environment Setup"
-          description="Configure and create custom market simulation environments with API integrations"
-          icon="settings"
-          buttonLabel="Create Environment"
-          (cardClick)="goTo('environment-setup')"
-        ></card>
-
-        <!-- Market Analysis -->
-        <card
-          title="Market Analysis"
-          description="Analyze trading sessions and visualize real-time market data with comprehensive dashboards"
+          title="Key Terms"
+          description="Key trading concepts like bid/ask, spread, order book, and spotting good trades explained in simple terms"
           icon="bar-chart-3"
-          buttonLabel="Start Analysis"
-          (cardClick)="goTo('analysis')"
-        ></card>
-
-        <!-- Bot Management -->
-        <card
-          title="Bot Management"
-          description="Create, edit, and manage automated trading bots with custom strategies and parameters"
-          icon="bot"
-          buttonLabel="Manage Bots"
-          (cardClick)="goTo('bot-management')"
+          buttonLabel="Start Learning"
+          (cardClick)="goTo('tutorial')"
         ></card>
       </div>
 

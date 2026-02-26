@@ -675,6 +675,7 @@
   border-top: 1px solid #2d3a4f;
   overflow-y: auto;
   max-height: 80vh;
+  flex-direction: column-reverse;
 }
 
 .book-row {
@@ -760,6 +761,32 @@
   font-size: 0.75rem;
   color: black;
   font-weight: 600;
+}
+
+.spread-value.spread-negative {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+.settle-btn {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #fff;
+  background: #ef4444;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.settle-btn:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.settle-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .last-price {
@@ -2224,6 +2251,41 @@ p {
 
 .broadcast-btn:hover {
   background: #2563eb;
+}
+
+/* Retail Simulation Button (Header) */
+.retail-sim-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #8b5cf6;
+  border: none;
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all 200ms ease;
+  margin-right: 0.5rem;
+}
+
+.retail-sim-btn:hover {
+  background: #7c3aed;
+}
+
+.retail-sim-btn.active {
+  background: #dc2626;
+  animation: retail-pulse 1.5s ease-in-out infinite;
+}
+
+.retail-sim-btn.active:hover {
+  background: #b91c1c;
+}
+
+@keyframes retail-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
 }
 
 /* Messages Button (Header) */

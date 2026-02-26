@@ -1,0 +1,166 @@
+/* ── Keyframes ── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateX(-18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes iconPop {
+  0%   { opacity: 0; transform: scale(0.5) rotate(-10deg); }
+  60%  { transform: scale(1.15) rotate(3deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+.tut-page {
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+  background: var(--green-50);
+}
+.tut-content {
+  width: 100%;
+  max-width: 620px;
+  padding-top: 1rem;
+}
+
+.tut-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--green-600);
+  margin-bottom: 1.5rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.5rem;
+  transition: all 0.25s ease;
+  opacity: 0;
+  animation: fadeSlideIn 0.4s cubic-bezier(0.22,1,0.36,1) forwards;
+  animation-delay: 0.05s;
+}
+.tut-back:hover {
+  background: var(--green-100);
+  transform: translateX(-4px);
+}
+
+.tut-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.tut-icon {
+  display: inline-block;
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  opacity: 0;
+  animation: iconPop 0.6s cubic-bezier(0.22,1,0.36,1) forwards;
+  animation-delay: 0.15s;
+}
+.tut-title {
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--green-700);
+  margin: 0 0 0.35rem;
+  opacity: 0;
+  animation: fadeSlideUp 0.5s cubic-bezier(0.22,1,0.36,1) forwards;
+  animation-delay: 0.25s;
+}
+.tut-desc {
+  font-size: 0.95rem;
+  color: var(--gray-600);
+  margin: 0;
+  opacity: 0;
+  animation: fadeSlideUp 0.5s cubic-bezier(0.22,1,0.36,1) forwards;
+  animation-delay: 0.35s;
+}
+
+.tut-card {
+  background: var(--white);
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  opacity: 0;
+  animation: scaleIn 0.5s cubic-bezier(0.22,1,0.36,1) forwards;
+  animation-delay: 0.4s;
+}
+
+.tut-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.25rem 0.5rem;
+  border-bottom: 1px solid var(--green-100);
+  opacity: 0;
+  animation: fadeSlideIn 0.5s cubic-bezier(0.22,1,0.36,1) forwards;
+  animation-delay: calc(0.5s + var(--i, 0) * 0.12s);
+}
+.tut-item:last-child { border-bottom: none; }
+
+.item-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+  color: var(--white);
+}
+.item-marker.sell-pressure { background: linear-gradient(135deg, #dc2626, #b91c1c); font-size: 1.1rem; }
+.item-marker.buy-pressure  { background: linear-gradient(135deg, #16a34a, #15803d); font-size: 1.1rem; }
+.item-marker.flow          { background: linear-gradient(135deg, #d97706, #b45309); font-size: 1.1rem; }
+
+.item-body h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 0.25rem;
+}
+.item-body p {
+  font-size: 0.875rem;
+  color: var(--gray-600);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.tut-example {
+  margin-top: 1.5rem;
+  background: var(--green-100);
+  border-left: 4px solid var(--green-600);
+  border-radius: 0 0.75rem 0.75rem 0;
+  padding: 1rem 1.25rem;
+  opacity: 0;
+  animation: fadeSlideUp 0.5s cubic-bezier(0.22,1,0.36,1) forwards;
+  animation-delay: 0.85s;
+}
+.example-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--green-700);
+  background: var(--green-200);
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+.tut-example p {
+  font-size: 0.9rem;
+  color: #374151;
+  margin: 0;
+  line-height: 1.6;
+}

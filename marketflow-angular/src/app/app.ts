@@ -3,11 +3,12 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
 import { AuthService } from './services/auth.service';
 import { ChatAssistant } from './components/chat-assistant/chat-assistant';
+import { WalkthroughOverlayComponent } from './components/walkthrough-overlay/walkthrough-overlay';
 import { filter } from 'rxjs/operators';
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, RouterOutlet, ChatAssistant],
+  imports: [CommonModule, RouterOutlet, ChatAssistant, WalkthroughOverlayComponent],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })

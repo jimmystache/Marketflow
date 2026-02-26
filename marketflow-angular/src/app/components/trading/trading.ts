@@ -30,6 +30,7 @@ import {
 Chart.register(...registerables);
 
 import { HelpModeService } from '../../services/help-mode.service';
+import { RetailSimulationService } from '../../services/retail-simulation.service';
 
 interface OrderBookEntry {
   price: number;
@@ -126,6 +127,33 @@ export class Trading implements OnInit, OnDestroy {
   isSendingMessage: boolean = false;
   dismissedMessageIds: Set<string> = new Set();
 
+  /** localStorage key for persisting dismissed message IDs per environment */
+  private get dismissedStorageKey(): string {
+    return `marketflow_dismissed_msgs_${this.environmentId}`;
+  }
+
+  /** Load dismissed message IDs from localStorage for the current environment */
+  private loadDismissedMessageIds(): void {
+    try {
+      const raw = localStorage.getItem(this.dismissedStorageKey);
+      this.dismissedMessageIds = raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+      this.dismissedMessageIds = new Set();
+    }
+  }
+
+  /** Persist the current dismissed set to localStorage */
+  private saveDismissedMessageIds(): void {
+    try {
+      localStorage.setItem(
+        this.dismissedStorageKey,
+        JSON.stringify([...this.dismissedMessageIds]),
+      );
+    } catch {
+      // storage full or unavailable — ignore
+    }
+  }
+
   // Environment lists for selection
   publicEnvironments: DbTradingEnvironment[] = [];
   myEnvironments: DbTradingEnvironment[] = [];
@@ -192,6 +220,8 @@ export class Trading implements OnInit, OnDestroy {
   isPlacingOrder: boolean = false;
 
   isResettingOrderBook: boolean = false;
+  isSettlingOrderBook: boolean = false;
+  isRetailSimRunning: boolean = false;
 
   // Order book
   bids: OrderBookEntry[] = [];
@@ -284,6 +314,9 @@ export class Trading implements OnInit, OnDestroy {
   bestAsk: number | null = null;
   spread: number | null = null;
   lastPrice: number | null = null;
+  /** True when the RAW book has crossing orders that need settlement */
+  hasCross = false;
+  isMatchingSweepRunning = false;
 
   // UI state
   activeTab: 'orderbook' | 'history' | 'myorders' | 'graph' = 'orderbook';
@@ -326,6 +359,7 @@ export class Trading implements OnInit, OnDestroy {
     private supabaseService: SupabaseService,
     private tradingContextService: TradingContextService,
     private helpModeService: HelpModeService,
+    private retailSimulationService: RetailSimulationService,
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -802,7 +836,7 @@ export class Trading implements OnInit, OnDestroy {
       this.selectedStockId,
     );
     this.environmentOrders = orders;
-    this.updateEnvironmentOrderBook();
+    await this.updateEnvironmentOrderBook();
 
     // Load my orders
     this.myEnvironmentOrders = await this.supabaseService.getParticipantOrders(
@@ -857,9 +891,11 @@ export class Trading implements OnInit, OnDestroy {
     this.supabaseService.subscribeToEnvironmentOrders(
       this.environmentId,
       this.selectedStockId,
-      (orders) => {
+      async (orders) => {
+        // Don't overwrite order data while a matching sweep is resolving crosses
+        if (this.isMatchingSweepRunning) return;
         this.environmentOrders = orders;
-        this.updateEnvironmentOrderBook();
+        await this.updateEnvironmentOrderBook();
         this.loadMyOrders();
       },
     );
@@ -876,6 +912,9 @@ export class Trading implements OnInit, OnDestroy {
         }
       },
     );
+
+    // Load previously dismissed message IDs from localStorage before subscribing
+    this.loadDismissedMessageIds();
 
     // Subscribe to admin messages
     this.supabaseService.subscribeToEnvironmentMessages(
@@ -929,6 +968,7 @@ export class Trading implements OnInit, OnDestroy {
   dismissMessageBanner(): void {
     if (this.latestMessage) {
       this.dismissedMessageIds.add(this.latestMessage.id);
+      this.saveDismissedMessageIds();
     }
     this.showMessageBanner = false;
   }
@@ -952,6 +992,7 @@ export class Trading implements OnInit, OnDestroy {
       this.showMessageComposer = false;
       // Mark all current messages as read
       this.adminMessages.forEach(m => this.dismissedMessageIds.add(m.id));
+      this.saveDismissedMessageIds();
       this.showMessageBanner = false;
     }
   }
@@ -996,65 +1037,171 @@ export class Trading implements OnInit, OnDestroy {
   /**
    * Update order book from environment orders
    */
-  updateEnvironmentOrderBook(): void {
-    // Aggregate bids
-    const bidMap = new Map<number, { units: number; isMine: boolean; count: number }>();
-    this.environmentOrders
-      .filter((o) => o.type === 'buy' && (o.status === 'open' || o.status === 'partial'))
-      .forEach((o) => {
-        const remaining = o.units - o.filled_units;
-        if (remaining > 0) {
-          const price = Number(o.price);
-          const existing = bidMap.get(price) || { units: 0, isMine: false, count: 0 };
-          existing.units += remaining;
-          existing.count++;
-          if (o.participant_id === this.participantId) existing.isMine = true;
-          bidMap.set(price, existing);
-        }
-      });
+  async updateEnvironmentOrderBook(): Promise<void> {
+    this.rebuildOrderBookFromEnvironmentOrders();
 
+    // If the raw best bid >= best ask (before display filtering), there are crossing
+    // orders that need to be matched. Trigger the sweep automatically.
+    if (this.bestBid !== null && this.bestAsk !== null && this.bestBid >= this.bestAsk) {
+      await this.sweepCrossingOrders();
+    }
+  }
+
+  /**
+   * Rebuild bids/asks/spread from this.environmentOrders.
+   *
+   * The "display" spread is computed from the displayed book (after removing
+   * crossing orders so the UI never shows a negative spread). The raw best
+   * bid/ask are stored separately so sweepCrossingOrders can still find them.
+   */
+  private rebuildOrderBookFromEnvironmentOrders(): void {
+    // Collect all open individual orders with numeric prices
+    const rawBuys = this.environmentOrders
+      .filter(o => o.type === 'buy' && (o.status === 'open' || o.status === 'partial'))
+      .map(o => ({ ...o, price: Number(o.price), remaining: o.units - o.filled_units }))
+      .filter(o => o.remaining > 0)
+      .sort((a, b) => b.price - a.price); // highest bid first
+
+    const rawSells = this.environmentOrders
+      .filter(o => o.type === 'sell' && (o.status === 'open' || o.status === 'partial'))
+      .map(o => ({ ...o, price: Number(o.price), remaining: o.units - o.filled_units }))
+      .filter(o => o.remaining > 0)
+      .sort((a, b) => a.price - b.price); // lowest ask first
+
+    // Raw best bid/ask (before any filtering) — used by settle logic and sweep trigger
+    this.bestBid = rawBuys.length > 0 ? rawBuys[0].price : null;
+    this.bestAsk = rawSells.length > 0 ? rawSells[0].price : null;
+    // hasCross is true when a non-self cross exists (different participants)
+    this.hasCross =
+      this.bestBid !== null &&
+      this.bestAsk !== null &&
+      this.bestBid >= this.bestAsk &&
+      rawBuys[0].participant_id !== rawSells[0].participant_id;
+
+    // Build the DISPLAYED order book by removing all crossing price levels.
+    // We step through bids high→low and asks low→high; any bid.price >= ask.price
+    // means those levels are in-flight and should be hidden until matched.
+    const filteredBuys = [...rawBuys];
+    const filteredSells = [...rawSells];
+
+    // Keep removing the top cross until none remains.
+    // If a top bid and top ask cross but belong to the same participant we
+    // still remove them from display (they'll appear as "pending" — a 
+    // same-participant self-cross is invalid anyway and the settle skips it).
+    let changed = true;
+    while (changed && filteredBuys.length > 0 && filteredSells.length > 0) {
+      changed = false;
+      const topBid = filteredBuys[0];
+      const topAsk = filteredSells[0];
+      if (topBid.price >= topAsk.price) {
+        filteredBuys.shift();
+        filteredSells.shift();
+        changed = true;
+      }
+    }
+
+    // Aggregate displayed bids by price level
+    const bidMap = new Map<number, { units: number; isMine: boolean; count: number }>();
+    for (const o of filteredBuys) {
+      const entry = bidMap.get(o.price) ?? { units: 0, isMine: false, count: 0 };
+      entry.units += o.remaining;
+      entry.count++;
+      if (o.participant_id === this.participantId) entry.isMine = true;
+      bidMap.set(o.price, entry);
+    }
     this.bids = Array.from(bidMap.entries())
-      .map(([price, data]) => ({
-        price,
-        units: data.units,
-        isMine: data.isMine,
-        orderCount: data.count,
-      }))
+      .map(([price, d]) => ({ price, units: d.units, isMine: d.isMine, orderCount: d.count }))
       .sort((a, b) => b.price - a.price);
 
-    // Aggregate asks
+    // Aggregate displayed asks by price level
     const askMap = new Map<number, { units: number; isMine: boolean; count: number }>();
-    this.environmentOrders
-      .filter((o) => o.type === 'sell' && (o.status === 'open' || o.status === 'partial'))
-      .forEach((o) => {
-        const remaining = o.units - o.filled_units;
-        if (remaining > 0) {
-          const price = Number(o.price);
-          const existing = askMap.get(price) || { units: 0, isMine: false, count: 0 };
-          existing.units += remaining;
-          existing.count++;
-          if (o.participant_id === this.participantId) existing.isMine = true;
-          askMap.set(price, existing);
-        }
-      });
-
+    for (const o of filteredSells) {
+      const entry = askMap.get(o.price) ?? { units: 0, isMine: false, count: 0 };
+      entry.units += o.remaining;
+      entry.count++;
+      if (o.participant_id === this.participantId) entry.isMine = true;
+      askMap.set(o.price, entry);
+    }
     this.asks = Array.from(askMap.entries())
-      .map(([price, data]) => ({
-        price,
-        units: data.units,
-        isMine: data.isMine,
-        orderCount: data.count,
-      }))
+      .map(([price, d]) => ({ price, units: d.units, isMine: d.isMine, orderCount: d.count }))
       .sort((a, b) => a.price - b.price);
 
-    // Update spread info
-    this.bestBid = this.bids.length > 0 ? this.bids[0].price : null;
-    this.bestAsk = this.asks.length > 0 ? this.asks[0].price : null;
+    // Display spread is from the FILTERED book — guaranteed ≥ 0
+    const displayBid = this.bids.length > 0 ? this.bids[0].price : null;
+    const displayAsk = this.asks.length > 0 ? this.asks[0].price : null;
+    this.spread = displayBid !== null && displayAsk !== null
+      ? +(displayAsk - displayBid).toFixed(2)
+      : null;
+  }
 
-    if (this.bestBid !== null && this.bestAsk !== null) {
-      this.spread = +(this.bestAsk - this.bestBid).toFixed(2);
-    } else {
-      this.spread = null;
+  /**
+   * Core settlement loop: loads fresh orders from DB, matches any crossing
+   * bid/ask pairs (skipping same-participant self-crosses), and returns the
+   * number of trades executed.  Caller is responsible for re-entrancy guards.
+   */
+  private async performSettlement(): Promise<number> {
+    let totalMatched = 0;
+    let keepMatching = true;
+
+    while (keepMatching) {
+      keepMatching = false;
+
+      const openOrders = await this.supabaseService.getEnvironmentOpenOrders(
+        this.environmentId,
+        this.selectedStockId,
+      );
+
+      const buyOrders = openOrders
+        .filter(o => o.type === 'buy' && (o.status === 'open' || o.status === 'partial'))
+        .sort((a, b) => Number(b.price) - Number(a.price));
+
+      const sellOrders = openOrders
+        .filter(o => o.type === 'sell' && (o.status === 'open' || o.status === 'partial'))
+        .sort((a, b) => Number(a.price) - Number(b.price));
+
+      if (buyOrders.length === 0 || sellOrders.length === 0) break;
+
+      // Walk the book to find the first cross with DIFFERENT participants
+      let matched = false;
+      outer: for (const bid of buyOrders) {
+        for (const ask of sellOrders) {
+          if (Number(bid.price) < Number(ask.price)) break outer; // no more crosses
+          if (bid.participant_id === ask.participant_id) continue;  // skip self-cross
+          await this.executeEnvironmentTrade(bid, ask);
+          totalMatched++;
+          keepMatching = true;
+          matched = true;
+          break outer; // restart the loop with fresh orders
+        }
+      }
+      if (!matched) break; // only same-participant crosses remain — nothing to do
+    }
+
+    // Refresh local state after settlement
+    const freshOrders = await this.supabaseService.getEnvironmentOpenOrders(
+      this.environmentId,
+      this.selectedStockId,
+    );
+    this.environmentOrders = freshOrders;
+    this.rebuildOrderBookFromEnvironmentOrders();
+    this.loadMyOrders();
+
+    return totalMatched;
+  }
+
+  /**
+   * Sweep the order book and match all crossing orders (bestBid >= bestAsk).
+   * Called automatically when a new order arrives that crosses the book.
+   */
+  private async sweepCrossingOrders(): Promise<void> {
+    if (this.isMatchingSweepRunning) return;
+    this.isMatchingSweepRunning = true;
+    try {
+      await this.performSettlement();
+    } catch (error) {
+      console.error('Error in sweepCrossingOrders:', error);
+    } finally {
+      this.isMatchingSweepRunning = false;
     }
   }
 
@@ -1123,6 +1270,8 @@ export class Trading implements OnInit, OnDestroy {
    */
   leaveEnvironment(): void {
     this.supabaseService.unsubscribeAll();
+    this.retailSimulationService.stop();
+    this.isRetailSimRunning = false;
     this.isConnected = false;
     this.currentEnvironment = null;
     this.environmentId = '';
@@ -1170,9 +1319,9 @@ export class Trading implements OnInit, OnDestroy {
    */
   private subscribeToUpdates(): void {
     // Subscribe to orders
-    this.supabaseService.subscribeToOrders(this.marketId, (orders) => {
+    this.supabaseService.subscribeToOrders(this.marketId, async (orders) => {
       this.allOrders = orders;
-      this.updateOrderBook();
+      await this.updateOrderBook();
       this.updateMyOrders();
     });
 
@@ -1486,16 +1635,33 @@ export class Trading implements OnInit, OnDestroy {
   }
 
   /**
-   * Execute a trade between a buy and sell order (environment-based)
+   * Execute a trade between a buy and sell order (environment-based).
+   * Always reloads both orders fresh from DB so filled_units is current.
    */
   private async executeEnvironmentTrade(
     buyOrder: DbEnvironmentOrder,
     sellOrder: DbEnvironmentOrder,
   ): Promise<void> {
+    // Reload both orders from DB to get the most up-to-date filled_units
+    const [freshBuy, freshSell] = await Promise.all([
+      this.supabaseService.getEnvironmentOrderById(buyOrder.id),
+      this.supabaseService.getEnvironmentOrderById(sellOrder.id),
+    ]);
+
+    // If either order was filled or cancelled since we last looked, skip
+    if (!freshBuy || !freshSell) return;
+    if (freshBuy.status === 'filled' || freshBuy.status === 'cancelled') return;
+    if (freshSell.status === 'filled' || freshSell.status === 'cancelled') return;
+
+    // Use fresh copies for all calculations
+    buyOrder = freshBuy;
+    sellOrder = freshSell;
+
     const buyRemaining = buyOrder.units - buyOrder.filled_units;
     const sellRemaining = sellOrder.units - sellOrder.filled_units;
     const tradeUnits = Math.min(buyRemaining, sellRemaining);
-    const tradePrice = Number(sellOrder.price);
+    // Use midpoint price — fair for both sides
+    const tradePrice = +((Number(buyOrder.price) + Number(sellOrder.price)) / 2).toFixed(2);
 
     if (tradeUnits <= 0) return;
 
@@ -1589,9 +1755,9 @@ export class Trading implements OnInit, OnDestroy {
   /**
    * Update the order book display (legacy - now handled by updateEnvironmentOrderBook)
    */
-  private updateOrderBook(): void {
+  private async updateOrderBook(): Promise<void> {
     // Now handled by updateEnvironmentOrderBook
-    this.updateEnvironmentOrderBook();
+    await this.updateEnvironmentOrderBook();
   }
 
   /**
@@ -1615,6 +1781,25 @@ export class Trading implements OnInit, OnDestroy {
     } catch (error) {
       console.error('Error cancelling order:', error);
       alert('Failed to cancel order');
+    }
+  }
+
+  /**
+   * Immediately match all crossing orders in the current environment order book.
+   * Triggered manually by the user via the ⚡ Settle button.
+   */
+  async settleOrderBook(): Promise<void> {
+    if (this.isSettlingOrderBook || this.isMatchingSweepRunning) return;
+    this.isSettlingOrderBook = true;
+    try {
+      const totalMatched = await this.performSettlement();
+      if (totalMatched > 0) {
+        console.log(`✓ Settled ${totalMatched} crossing order pair(s)`);
+      }
+    } catch (error) {
+      console.error('Error settling order book:', error);
+    } finally {
+      this.isSettlingOrderBook = false;
     }
   }
 
@@ -1667,7 +1852,7 @@ export class Trading implements OnInit, OnDestroy {
         );
       }
 
-      this.updateOrderBook();
+      await this.updateOrderBook();
 
       if (cancelledCount > 0) {
         // Keep it simple + visible for demos.
@@ -1681,6 +1866,44 @@ export class Trading implements OnInit, OnDestroy {
     } finally {
       this.isResettingOrderBook = false;
     }
+  }
+
+  /**
+   * Toggle the retail investor simulation on/off.
+   * Spawns bots that place aggressive market-crossing orders to drive price movement.
+   */
+  async toggleRetailSimulation(): Promise<void> {
+    if (this.isRetailSimRunning) {
+      this.retailSimulationService.stop();
+      this.isRetailSimRunning = false;
+      return;
+    }
+
+    if (!this.environmentId || !this.selectedStockId) return;
+
+    this.isRetailSimRunning = true;
+    const result = await this.retailSimulationService.start(
+      this.environmentId,
+      this.selectedStockId,
+      300, // 5 minutes
+      4,   // 4 retail bots
+    );
+
+    if (!result.success) {
+      console.error('Retail simulation failed:', result.message);
+      this.isRetailSimRunning = false;
+      return;
+    }
+
+    console.log(result.message);
+
+    // Auto-update flag when simulation ends naturally
+    const check = setInterval(() => {
+      if (!this.retailSimulationService.isActive()) {
+        this.isRetailSimRunning = false;
+        clearInterval(check);
+      }
+    }, 2000);
   }
 
   /**

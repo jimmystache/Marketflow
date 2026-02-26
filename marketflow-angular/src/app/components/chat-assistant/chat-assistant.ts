@@ -14,6 +14,7 @@ import { TradingContextService } from '../../services/trading-context.service';
 import { OrderExecutionService } from '../../services/order-execution.service';
 import { BotSimulationService } from '../../services/bot-simulation.service';
 import { GrokAiService, MarketContext } from '../../services/grok-ai.service';
+import { WalkthroughService } from '../../services/walkthrough.service';
 
 interface ChatMessage {
   id: string;
@@ -76,7 +77,8 @@ export class ChatAssistant implements OnInit, OnDestroy {
     private elRef: ElementRef,
     private renderer: Renderer2,
     private botSimulationService: BotSimulationService,
-    private grokAiService: GrokAiService
+    private grokAiService: GrokAiService,
+    private walkthroughService: WalkthroughService
   ) {}
 
 
@@ -340,6 +342,8 @@ export class ChatAssistant implements OnInit, OnDestroy {
           // For other analysis types, show the raw analysis
           this.addMessage(response.analysis, 'assistant');
         }
+      } else if (response.isRejection) {
+        this.addMessage(response.error!, 'assistant');
       } else {
         this.addMessage(`❌ ${response.error}`, 'assistant');
       }
@@ -531,6 +535,26 @@ export class ChatAssistant implements OnInit, OnDestroy {
         return;
       }
 
+      // Walkthrough command – only active inside a trading environment
+      if (lower.includes('walk') || lower.includes('tour') || lower.includes('walkthrough')) {
+        const ctx = this.tradingContextService.getContext();
+        if (!ctx.environmentId) {
+          this.addMessage(
+            '⚠️ The walkthrough only works inside a trading environment. ' +
+            'Join one first, then type <b>walk</b> again.',
+            'assistant'
+          );
+        } else {
+          this.addMessage(
+            '🎯 Starting the tour follow the highlighted sections! Click <b>Next</b> to advance.',
+            'assistant'
+          );
+          this.closeChat();
+          this.walkthroughService.start();
+        }
+        return;
+      }
+
       // Bot simulation commands
       if (lower.includes('bot') && (lower.includes('sim') || lower.includes('run'))) {
         await this.handleBotSimulation(input);
@@ -672,7 +696,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
 
     // Set pending order for user confirmation
     this.pendingOrder = { type: 'buy', units, price };
-    this.addMessage(`Pending buy order: ${units} shares @ $${price.toFixed(2)} — click Confirm or Cancel.`, 'assistant');
+    this.addMessage(`Pending buy order: ${units} shares @ $${price.toFixed(2)}  click Confirm or Cancel.`, 'assistant');
   }
 
   /**
@@ -728,7 +752,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
 
     // Set pending order for user confirmation
     this.pendingOrder = { type: 'sell', units, price };
-    this.addMessage(`Pending sell order: ${units} shares @ $${price.toFixed(2)} — click Confirm or Cancel.`, 'assistant');
+    this.addMessage(`Pending sell order: ${units} shares @ $${price.toFixed(2)}  click Confirm or Cancel.`, 'assistant');
   }
 
   /**
@@ -955,7 +979,9 @@ export class ChatAssistant implements OnInit, OnDestroy {
       '• what\'s my position?\n' +
       '• what are my stats?\n' +
       '• show cash balance\n' +
-      '• show recent trades',
+      '• show recent trades\n\n' +
+      'Onboarding:\n' +
+      '• walk  →  start the interactive UI tour',
       'assistant'
     );
   }

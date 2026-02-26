@@ -400,28 +400,6 @@
         <div class="market-info">
           <span class="market-label">{{ currentEnvironment?.name || 'MARKETFLOW' }}</span>
           <span class="market-id">{{ symbol }}</span>
-
-          <div class="id-strip" *ngIf="environmentId || selectedStockId">
-            <button
-              class="id-pill"
-              type="button"
-              *ngIf="environmentId"
-              (click)="copyEnvironmentId()"
-              title="Copy environment id"
-            >
-              ENV: <span class="id-mono">{{ shortId(environmentId) }}</span>
-            </button>
-            <button
-              class="id-pill"
-              type="button"
-              *ngIf="selectedStockId"
-              (click)="copyStockId()"
-              title="Copy stock id"
-            >
-              STK: <span class="id-mono">{{ shortId(selectedStockId) }}</span>
-            </button>
-            <span class="copy-hint" *ngIf="copiedHint">{{ copiedHint }}</span>
-          </div>
         </div>
       </div>
       
@@ -466,6 +444,21 @@
             <path d="m3 11 18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>
           </svg>
           Broadcast
+        </button>
+
+        <!-- Retail Investor Simulation Button (Admin Only) -->
+        <button *ngIf="isAdmin" class="retail-sim-btn" [class.active]="isRetailSimRunning"
+                (click)="toggleRetailSimulation()"
+                (mouseenter)="showHelp($event, 'Simulate retail investors placing random trades to drive price movement.')"
+                (mouseleave)="closeTooltip()"
+                title="Toggle retail investor simulation">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          {{ isRetailSimRunning ? 'Stop Retail' : 'Retail Sim' }}
         </button>
 
         <!-- Message History Button (All Users) -->
@@ -811,18 +804,7 @@
         <div class="book-header">
           <span class="col-units">UNITS</span>
           <span class="col-price">PRICE</span>
-          <span class="col-mine book-header-right">
-            <span>MINE</span>
-            <button
-              class="reset-book-btn"
-              type="button"
-              (click)="resetOrderBook()"
-              [disabled]="isResettingOrderBook"
-              title="Cancel all open orders (demo reset)"
-            >
-              {{ isResettingOrderBook ? 'RESETTING…' : 'RESET' }}
-            </button>
-          </span>
+          <span class="col-mine">MINE</span>
         </div>
 
         <div class="orderbook-scroll">
@@ -835,7 +817,7 @@
         >
           <div 
             class="book-row ask"
-            *ngFor="let ask of asks.slice().reverse()"
+            *ngFor="let ask of asks.slice()"
             (click)="setOrderPriceFromBook(ask.price)">
             <span class="col-units">{{ ask.units }}</span>
             <span class="col-price">{{ formatCurrency(ask.price) }}</span>
@@ -852,6 +834,14 @@
           <span class="spread-label">Spread</span>
           <span class="spread-value">{{ formatCurrency(spread) }}</span>
           <span class="last-price" *ngIf="lastPrice !== null">Last: {{ formatCurrency(lastPrice) }}</span>
+          <button
+            *ngIf="hasCross"
+            class="settle-btn"
+            [disabled]="isSettlingOrderBook || isMatchingSweepRunning"
+            (click)="settleOrderBook()"
+            title="Match all crossing orders now">
+            {{ isSettlingOrderBook ? 'Settling...' : '⚡ Settle' }}
+          </button>
         </div>
 
         <!-- Bids (Buy Orders) -->
@@ -996,7 +986,7 @@
     </main>
 
     <!-- Right Panel - Market Stats (Optional) -->
-    <aside class="right-panel">
+    <aside class="right-panel" id="wt-market-stats">
       <div class="market-stats">
         <h3 class="stats-title">Market Stats</h3>
         
