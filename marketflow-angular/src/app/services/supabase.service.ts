@@ -1428,7 +1428,7 @@ export class SupabaseService {
   /**
    * Get trades for a stock in an environment
    */
-  async getEnvironmentTrades(environmentId: string, stockId: string, limit: number = 50): Promise<DbEnvironmentTrade[]> {
+  async getEnvironmentTrades(environmentId: string, stockId: string, limit: number = 500): Promise<DbEnvironmentTrade[]> {
     const { data, error } = await this.supabase
       .from('environment_trades')
       .select('*')
@@ -1582,6 +1582,39 @@ export class SupabaseService {
         }
       )
       .subscribe();
+  }
+
+  /**
+   * Subscribe to trades for a single stock for use in the all-stocks graph.
+   * Creates an independent channel (does not conflict with the main envTradesChannel).
+   * Returns an unsubscribe function that the caller must invoke on cleanup.
+   */
+  subscribeToStockTradesForGraph(
+    environmentId: string,
+    stockId: string,
+    callback: (trades: DbEnvironmentTrade[]) => void,
+  ): () => void {
+    // Initial load
+    this.getEnvironmentTrades(environmentId, stockId, 200).then(trades => callback(trades));
+
+    const channel = this.supabase
+      .channel(`allstocks_trades:${environmentId}:${stockId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'environment_trades',
+          filter: `market_id=eq.${environmentId}`,
+        },
+        async () => {
+          const trades = await this.getEnvironmentTrades(environmentId, stockId, 200);
+          callback(trades);
+        },
+      )
+      .subscribe();
+
+    return () => { this.supabase.removeChannel(channel); };
   }
 
   // ==================== ADMIN MESSAGE OPERATIONS ====================

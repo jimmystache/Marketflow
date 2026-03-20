@@ -27,10 +27,12 @@ import {
   Chart as ChartJS,
   ChartConfiguration,
 } from 'chart.js';
+import 'chartjs-adapter-date-fns';
 Chart.register(...registerables);
 
 import { HelpModeService } from '../../services/help-mode.service';
 import { RetailSimulationService } from '../../services/retail-simulation.service';
+import { BotSimulationService } from '../../services/bot-simulation.service';
 
 interface OrderBookEntry {
   price: number;
@@ -221,7 +223,22 @@ export class Trading implements OnInit, OnDestroy {
 
   isResettingOrderBook: boolean = false;
   isSettlingOrderBook: boolean = false;
-  isRetailSimRunning: boolean = false;
+
+  // Bot simulation controls
+  mmBotTargetStockId: string = '';
+  mmBotVolatility: 'normal' | 'high' | 'extreme' = 'normal';
+  activeMmSimStocks: Set<string> = new Set();
+  retailBotTargetStockId: string = '';
+  retailAsymmetry: 'low' | 'medium' | 'high' = 'medium';
+  activeRetailSimStocks: Set<string> = new Set();
+  /** Shared tick speed for all bots (200–1400 ms) */
+  botTickSpeedMs: number = 800;
+  /** Target mid-price for running MM bots (0 = not set) */
+  botTargetPrice: number = 0;
+  /** Whether the target price override is active */
+  botTargetEnabled: boolean = false;
+  /** Polling intervals that track when bot simulations end naturally */
+  private botPollIntervals: ReturnType<typeof setInterval>[] = [];
 
   // Order book
   bids: OrderBookEntry[] = [];
@@ -323,6 +340,8 @@ export class Trading implements OnInit, OnDestroy {
 
   // Chart
   priceChart: Chart | null = null;
+
+  // All-stocks chart
   
   // Chart time range filter
   chartTimeRange: string = 'all';
@@ -360,6 +379,7 @@ export class Trading implements OnInit, OnDestroy {
     private tradingContextService: TradingContextService,
     private helpModeService: HelpModeService,
     private retailSimulationService: RetailSimulationService,
+    private botSimulationService: BotSimulationService,
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -375,7 +395,10 @@ export class Trading implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.supabaseService.unsubscribeAll();
-
+    this.retailSimulationService.stopAll();
+    this.botSimulationService.stopAll();
+    this.botPollIntervals.forEach(id => clearInterval(id));
+    this.botPollIntervals = [];
     if (this.priceSeriesRebuildTimer) {
       clearTimeout(this.priceSeriesRebuildTimer);
       this.priceSeriesRebuildTimer = null;
@@ -778,6 +801,13 @@ export class Trading implements OnInit, OnDestroy {
     // Select first stock by default
     if (this.environmentStocks.length > 0 && !this.selectedStock) {
       await this.selectStock(this.environmentStocks[0]);
+    }
+
+    // Initialise bot target stocks to first stock
+    if (this.environmentStocks.length > 0) {
+      const firstId = this.environmentStocks[0].id;
+      if (!this.mmBotTargetStockId) this.mmBotTargetStockId = firstId;
+      if (!this.retailBotTargetStockId) this.retailBotTargetStockId = firstId;
     }
 
     // Load positions
@@ -1270,8 +1300,14 @@ export class Trading implements OnInit, OnDestroy {
    */
   leaveEnvironment(): void {
     this.supabaseService.unsubscribeAll();
-    this.retailSimulationService.stop();
-    this.isRetailSimRunning = false;
+    this.retailSimulationService.stopAll();
+    this.activeRetailSimStocks.clear();
+    this.botSimulationService.stopAll();
+    this.activeMmSimStocks.clear();
+    this.botPollIntervals.forEach(id => clearInterval(id));
+    this.botPollIntervals = [];
+    this.mmBotTargetStockId = '';
+    this.retailBotTargetStockId = '';
     this.isConnected = false;
     this.currentEnvironment = null;
     this.environmentId = '';
@@ -1786,7 +1822,7 @@ export class Trading implements OnInit, OnDestroy {
 
   /**
    * Immediately match all crossing orders in the current environment order book.
-   * Triggered manually by the user via the ⚡ Settle button.
+   * Triggered manually by the user via the Settle button.
    */
   async settleOrderBook(): Promise<void> {
     if (this.isSettlingOrderBook || this.isMatchingSweepRunning) return;
@@ -1869,41 +1905,103 @@ export class Trading implements OnInit, OnDestroy {
   }
 
   /**
-   * Toggle the retail investor simulation on/off.
-   * Spawns bots that place aggressive market-crossing orders to drive price movement.
+   * Toggle the retail investor simulation on/off for the selected bot target stock.
    */
   async toggleRetailSimulation(): Promise<void> {
-    if (this.isRetailSimRunning) {
-      this.retailSimulationService.stop();
-      this.isRetailSimRunning = false;
+    const targetId = this.retailBotTargetStockId;
+    if (!targetId || !this.environmentId) return;
+
+    if (this.activeRetailSimStocks.has(targetId)) {
+      this.retailSimulationService.stop(targetId);
+      this.activeRetailSimStocks.delete(targetId);
       return;
     }
 
-    if (!this.environmentId || !this.selectedStockId) return;
-
-    this.isRetailSimRunning = true;
+    this.activeRetailSimStocks.add(targetId);
     const result = await this.retailSimulationService.start(
       this.environmentId,
-      this.selectedStockId,
+      targetId,
       300, // 5 minutes
       4,   // 4 retail bots
+      this.botTickSpeedMs,
+      this.retailAsymmetry,
     );
 
     if (!result.success) {
       console.error('Retail simulation failed:', result.message);
-      this.isRetailSimRunning = false;
+      this.activeRetailSimStocks.delete(targetId);
       return;
     }
 
     console.log(result.message);
 
-    // Auto-update flag when simulation ends naturally
+    // Auto-remove when simulation ends naturally
     const check = setInterval(() => {
-      if (!this.retailSimulationService.isActive()) {
-        this.isRetailSimRunning = false;
+      if (!this.retailSimulationService.isActive(targetId)) {
+        this.activeRetailSimStocks.delete(targetId);
         clearInterval(check);
+        this.botPollIntervals = this.botPollIntervals.filter(id => id !== check);
       }
     }, 2000);
+    this.botPollIntervals.push(check);
+  }
+
+  /**
+   * Toggle the market-maker bot simulation on/off for the selected bot target stock.
+   */
+  async toggleMmSimulation(): Promise<void> {
+    const targetId = this.mmBotTargetStockId;
+    if (!targetId || !this.environmentId) return;
+
+    if (this.activeMmSimStocks.has(targetId)) {
+      this.botSimulationService.stopSimulation(targetId);
+      this.activeMmSimStocks.delete(targetId);
+      return;
+    }
+
+    this.activeMmSimStocks.add(targetId);
+    const result = await this.botSimulationService.startSimulation(
+      this.environmentId,
+      targetId,
+      this.mmBotVolatility,
+      300, // 5 minutes
+      5,   // 5 market-maker bots
+      this.botTickSpeedMs,
+      (this.botTargetEnabled && this.botTargetPrice > 0) ? this.botTargetPrice : undefined,
+    );
+
+    if (!result.success) {
+      console.error('Market-maker simulation failed:', result.message);
+      this.activeMmSimStocks.delete(targetId);
+      return;
+    }
+
+    console.log(result.message);
+
+    // Auto-remove when simulation ends naturally
+    const check = setInterval(() => {
+      if (!this.botSimulationService.isSimulationRunning(targetId)) {
+        this.activeMmSimStocks.delete(targetId);
+        clearInterval(check);
+        this.botPollIntervals = this.botPollIntervals.filter(id => id !== check);
+      }
+    }, 2000);
+    this.botPollIntervals.push(check);
+  }
+
+  /** Toggle the target-price override on/off and push to all running MM sims. */
+  toggleBotTarget(): void {
+    this.botTargetEnabled = !this.botTargetEnabled;
+    this.syncBotTargetPrice();
+  }
+
+  /** Push the current target price (or null) to all running bot simulations. */
+  syncBotTargetPrice(): void {
+    const price = (this.botTargetEnabled && this.botTargetPrice > 0)
+      ? this.botTargetPrice
+      : null;
+    this.botSimulationService.setTargetPriceAll(price, this.environmentId || undefined);
+    this.retailSimulationService.setTargetPriceAll(price, this.environmentId || undefined);
   }
 
   /**

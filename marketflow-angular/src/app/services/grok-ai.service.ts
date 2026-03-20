@@ -100,7 +100,7 @@ export class GrokAiService {
     for (const pattern of this.INJECTION_PATTERNS) {
       pattern.lastIndex = 0;
       if (pattern.test(query)) {
-        return '⚠️ I can\'t process that request. Please ask a trading or market-related question.';
+        return 'I can\'t process that request. Please ask a trading or market-related question.';
       }
     }
 
@@ -108,7 +108,7 @@ export class GrokAiService {
     for (const pattern of this.OFF_TOPIC_PATTERNS) {
       pattern.lastIndex = 0;
       if (pattern.test(query)) {
-        return '📊 I can only help with trading and financial market questions. Try asking about prices, positions, spreads, or trade strategies.';
+        return 'I can only help with trading and financial market questions. Try asking about prices, positions, spreads, or trade strategies.';
       }
     }
 
@@ -116,7 +116,7 @@ export class GrokAiService {
     //    (short queries like "help" are fine; long unrelated ones are not)
     const words = query.trim().split(/\s+/);
     if (words.length > 4 && !this.FINANCE_KEYWORDS.test(query)) {
-      return '📊 I\'m a trading assistant and can only discuss markets, trading strategies, and financial analysis.';
+      return 'I\'m a trading assistant and can only discuss markets, trading strategies, and financial analysis.';
     }
 
     return null;

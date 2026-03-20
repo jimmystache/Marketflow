@@ -8,7 +8,7 @@
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M12 2C6.48 2 2 6.48 2 12C2 13.54 2.36 14.99 3 16.27V22L8.73 19C9.99 19.64 11.46 20 13 20C18.52 20 23 15.52 23 10C23 4.48 18.52 0 13 0H12ZM12 18C10.88 18 9.83 17.73 8.91 17.26L7 18.18V15.91C5.75 14.83 5 13.24 5 11.5C5 8.46 7.69 6 11 6H12C15.31 6 18 8.46 18 11.5C18 14.54 15.31 17 12 17V18Z" fill="white"/>
     </svg>
-    <span class="chat-badge" *ngIf="messages.length > 5">{{messages.length - 5}}</span>
+    <span class="chat-badge" *ngIf="unreadCount > 0">{{unreadCount}}</span>
   </div>
 
   <!-- Chat Window -->
@@ -26,18 +26,16 @@
 
     <!-- Mode Toggle -->
     <div class="mode-toggle">
-      <button 
-        class="mode-btn" 
+      <button
+        class="mode-btn"
         [class.active]="currentMode === 'command'"
         (click)="switchMode('command')">
-        <span class="icon">⚡</span>
         <span>Command</span>
       </button>
-      <button 
-        class="mode-btn" 
+      <button
+        class="mode-btn"
         [class.active]="currentMode === 'analysis'"
         (click)="switchMode('analysis')">
-        <span class="icon">🧠</span>
         <span>Analysis</span>
       </button>
       <!-- Menu Toggle Button -->
@@ -66,25 +64,6 @@
         <div class="context-row" *ngIf="currentStock">
           <span class="context-label">Stock:</span>
           <span class="context-value">{{currentStock.symbol}}</span>
-        </div>
-      </div>
-
-      <!-- Simulation Options (Command Mode Only) -->
-      <div class="menu-section" *ngIf="currentMode === 'command' && currentEnvironment && currentStock">
-        <div class="menu-section-title">Bot Simulation</div>
-        <div class="simulation-buttons">
-          <button class="sim-btn normal" (click)="quickActionNormalVolatility(); toggleMenu()" [disabled]="botSimulationRunning">
-            <span class="icon">⚪</span> Normal
-          </button>
-          <button class="sim-btn high" (click)="quickActionHighVolatility(); toggleMenu()" [disabled]="botSimulationRunning">
-            <span class="icon">⚡</span> High
-          </button>
-          <button class="sim-btn extreme" (click)="quickActionExtremeVolatility(); toggleMenu()" [disabled]="botSimulationRunning">
-            <span class="icon">🔥</span> Extreme
-          </button>
-          <button class="sim-btn stop" *ngIf="botSimulationRunning" (click)="stopSimulation(); toggleMenu()">
-            <span class="icon">⏹️</span> Stop
-          </button>
         </div>
       </div>
 

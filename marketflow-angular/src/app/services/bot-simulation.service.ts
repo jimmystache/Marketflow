@@ -7,6 +7,9 @@ import { OrderExecutionService } from './order-execution.service';
  * market mid-price, behaving as a market maker.  The spread width and
  * random price perturbation are governed by the volatility setting so
  * the resulting price series has realistic dynamics.
+ *
+ * Supports multiple simultaneous simulations — one per stock — via an
+ * internal Map keyed by stockId.
  */
 
 interface BotQuote {
@@ -44,6 +47,22 @@ interface VolatilityProfile {
   jitter: number;
 }
 
+/** Per-stock simulation state */
+interface MarketMakerSimState {
+  bots: BotState[];
+  timeoutHandle: any;
+  /** Current mid-price the bots quote around */
+  mid: number;
+  profile: VolatilityProfile;
+  endTime: number;
+  /** Target tick interval in ms (jitter ±40% applied on top) */
+  tickSpeedMs: number;
+  /** When set, mid-price mean-reverts toward this target each tick */
+  targetMid: number | null;
+  /** Tracks the last target value we ran cancelStaleOrders for */
+  lastSyncedTarget: number | null;
+}
+
 const VOLATILITY_PROFILES: Record<string, VolatilityProfile> = {
   normal: {
     tickSigma: 0.02,
@@ -75,13 +94,7 @@ const VOLATILITY_PROFILES: Record<string, VolatilityProfile> = {
   providedIn: 'root',
 })
 export class BotSimulationService {
-  private isRunning = false;
-  private timeoutHandle: any = null;
-  private bots: BotState[] = [];
-
-  /** Current mid-price the bots quote around */
-  private mid = 100;
-  private profile: VolatilityProfile = VOLATILITY_PROFILES['normal'];
+  private stockSimulations = new Map<string, MarketMakerSimState>();
 
   constructor(
     private supabaseService: SupabaseService,
@@ -96,39 +109,85 @@ export class BotSimulationService {
     volatility: 'normal' | 'high' | 'extreme',
     durationSeconds: number,
     numberOfBots: number = 5,
+    tickSpeedMs: number = 800,
+    initialPrice?: number,
   ): Promise<{ success: boolean; message: string }> {
-    if (this.isRunning) {
-      return { success: false, message: 'Simulation already running' };
+    if (this.stockSimulations.has(stockId)) {
+      return { success: false, message: 'Simulation already running for this stock' };
     }
 
-    this.profile = VOLATILITY_PROFILES[volatility] ?? VOLATILITY_PROFILES['normal'];
+    const profile = VOLATILITY_PROFILES[volatility] ?? VOLATILITY_PROFILES['normal'];
 
     try {
-      await this.initializeBots(environmentId, stockId, numberOfBots);
-      this.isRunning = true;
-      const endTime = Date.now() + durationSeconds * 1000;
-      this.scheduleNextTick(environmentId, stockId, endTime);
+      const { bots, mid } = await this.initializeBots(environmentId, stockId, numberOfBots, initialPrice);
+      const state: MarketMakerSimState = {
+        bots,
+        timeoutHandle: null,
+        mid,
+        profile,
+        endTime: Date.now() + durationSeconds * 1000,
+        tickSpeedMs,
+        targetMid: null,
+        lastSyncedTarget: null,
+      };
+      this.stockSimulations.set(stockId, state);
+      this.scheduleNextTick(environmentId, stockId);
       return {
         success: true,
         message: `Market-maker simulation started: ${numberOfBots} bots, ${volatility} volatility, ${durationSeconds}s`,
       };
     } catch (error: any) {
-      this.isRunning = false;
+      this.stockSimulations.delete(stockId);
       return { success: false, message: `Failed to start simulation: ${error.message}` };
     }
   }
 
-  stopSimulation(): void {
-    this.isRunning = false;
-    if (this.timeoutHandle) {
-      clearTimeout(this.timeoutHandle);
-      this.timeoutHandle = null;
+  stopSimulation(stockId: string): void {
+    const state = this.stockSimulations.get(stockId);
+    if (!state) return;
+    if (state.timeoutHandle) {
+      clearTimeout(state.timeoutHandle);
+      state.timeoutHandle = null;
     }
-    this.bots = [];
+    this.stockSimulations.delete(stockId);
   }
 
-  isSimulationRunning(): boolean {
-    return this.isRunning;
+  stopAll(): void {
+    for (const stockId of Array.from(this.stockSimulations.keys())) {
+      this.stopSimulation(stockId);
+    }
+  }
+
+  isSimulationRunning(stockId?: string): boolean {
+    if (stockId) return this.stockSimulations.has(stockId);
+    return this.stockSimulations.size > 0;
+  }
+
+  getActiveStockIds(): string[] {
+    return Array.from(this.stockSimulations.keys());
+  }
+
+  /**
+   * Set or clear a target mid-price for a running simulation.
+   * When set, `evolveMidPrice()` mean-reverts toward this target each tick.
+   * Pass `null` to resume normal random-walk behaviour.
+   */
+  setTargetPrice(stockId: string, price: number | null): void {
+    const state = this.stockSimulations.get(stockId);
+    if (state) {
+      state.targetMid = price;
+    }
+  }
+
+  /** Update the target price for all running simulations at once. */
+  setTargetPriceAll(price: number | null, environmentId?: string): void {
+    for (const [stockId, state] of this.stockSimulations.entries()) {
+      state.targetMid = price;
+      // Immediately cancel stale orders when a new target is set
+      if (price !== null && environmentId) {
+        this.cancelStaleOrders(environmentId, stockId, price);
+      }
+    }
   }
 
   // ────────────────────── initialisation ──────────────────────
@@ -137,17 +196,22 @@ export class BotSimulationService {
     environmentId: string,
     stockId: string,
     count: number,
-  ): Promise<void> {
+    initialPrice?: number,
+  ): Promise<{ bots: BotState[]; mid: number }> {
     const environment = await this.supabaseService.getEnvironment(environmentId);
     if (!environment) throw new Error('Environment not found');
 
-    // Seed mid from the most recent trade, or the stock's starting price
+    // Seed mid from the most recent trade, or the user-supplied initial price,
+    // or the stock's starting price, or a default of 100.
+    let mid = 100;
     const trades = await this.supabaseService.getEnvironmentTrades(environmentId, stockId);
     if (trades.length > 0) {
-      this.mid = Number(trades[0].price);
+      mid = Number(trades[0].price);
+    } else if (initialPrice && initialPrice > 0) {
+      mid = initialPrice;
     } else {
       const stock = await this.supabaseService.getEnvironmentStock(stockId);
-      this.mid = stock ? Number(stock.starting_price) : 100;
+      mid = stock ? Number(stock.starting_price) : 100;
     }
 
     // Each bot gets a different spread multiplier / quote size
@@ -160,7 +224,7 @@ export class BotSimulationService {
       { spreadMultiplier: 2.0, quoteSize: 6 },
     ];
 
-    this.bots = [];
+    const bots: BotState[] = [];
 
     for (let i = 0; i < count; i++) {
       const username = `BOT_${String(i + 1).padStart(2, '0')}`;
@@ -184,7 +248,7 @@ export class BotSimulationService {
 
       const preset = presets[i % presets.length];
 
-      this.bots.push({
+      bots.push({
         traderId: trader.id,
         participantId: participant.id,
         username,
@@ -195,15 +259,18 @@ export class BotSimulationService {
       });
     }
 
-    console.log(`✓ Initialised ${count} market-maker bots, mid = ${this.mid.toFixed(2)}`);
+    console.log(`✓ Initialised ${count} market-maker bots for stock ${stockId}, mid = ${mid.toFixed(2)}`);
+    return { bots, mid };
   }
 
   // ────────────────────── tick loop ──────────────────────
 
-  private scheduleNextTick(environmentId: string, stockId: string, endTime: number): void {
-    const delay = 600 + Math.floor(Math.random() * 800);
-    this.timeoutHandle = setTimeout(
-      () => this.runTick(environmentId, stockId, endTime),
+  private scheduleNextTick(environmentId: string, stockId: string): void {
+    const state = this.stockSimulations.get(stockId);
+    if (!state) return;
+    const delay = state.tickSpeedMs + Math.floor(Math.random() * state.tickSpeedMs * 0.4);
+    state.timeoutHandle = setTimeout(
+      () => this.runTick(environmentId, stockId),
       delay,
     );
   }
@@ -211,25 +278,45 @@ export class BotSimulationService {
   private async runTick(
     environmentId: string,
     stockId: string,
-    endTime: number,
   ): Promise<void> {
-    if (!this.isRunning) return;
+    const state = this.stockSimulations.get(stockId);
+    if (!state) return;
 
-    if (Date.now() >= endTime) {
-      this.stopSimulation();
-      console.log('🤖 Market-maker simulation completed');
+    if (Date.now() >= state.endTime) {
+      this.stopSimulation(stockId);
+      console.log(`Market-maker simulation completed for stock ${stockId}`);
       return;
     }
 
     // 1. Evolve the mid-price (random walk + shocks)
-    this.evolveMidPrice();
+    this.evolveMidPrice(state);
 
-    // 2. Each bot cancels stale quotes and places a fresh two-sided quote
-    for (const bot of this.bots) {
-      await this.requoteBot(environmentId, stockId, bot);
+    // 2. When a target price is active, cancel ALL bot quotes up-front
+    //    and fetch the REAL last trade price from the DB so we can
+    //    measure the actual gap (state.mid is snapped to target and
+    //    can't be used for this).
+    let lastTradePrice: number | null = null;
+    if (state.targetMid !== null) {
+      // On first tick with a new target, nuke all wrong-side orders
+      if (state.targetMid !== state.lastSyncedTarget) {
+        await this.cancelStaleOrders(environmentId, stockId, state.targetMid);
+        state.lastSyncedTarget = state.targetMid;
+      }
+      await Promise.all(state.bots.map(bot => this.cancelQuote(bot)));
+      try {
+        const trades = await this.supabaseService.getEnvironmentTrades(environmentId, stockId, 1);
+        if (trades.length > 0) {
+          lastTradePrice = Number(trades[0].price);
+        }
+      } catch { /* proceed with null — will fall back to state.mid */ }
     }
 
-    this.scheduleNextTick(environmentId, stockId, endTime);
+    // 3. Each bot places a fresh quote
+    for (const bot of state.bots) {
+      await this.requoteBot(environmentId, stockId, bot, state, lastTradePrice);
+    }
+
+    this.scheduleNextTick(environmentId, stockId);
   }
 
   // ────────────────────── mid-price dynamics ──────────────────────
@@ -238,19 +325,27 @@ export class BotSimulationService {
    * Gaussian random walk with occasional news shocks.
    * Uses Box-Muller for approximately normal increments.
    */
-  private evolveMidPrice(): void {
-    const p = this.profile;
-
-    // Normal tick noise
+  private evolveMidPrice(state: MarketMakerSimState): void {
+    const p = state.profile;
     const z = this.gaussianRandom();
-    this.mid += z * p.tickSigma;
 
-    // Occasional shock
-    if (Math.random() < p.shockProb) {
-      this.mid += this.gaussianRandom() * p.shockSigma;
+    if (state.targetMid !== null) {
+      // Snap mid directly to target, plus tiny noise for organic feel.
+      // This ensures bots quote tightly around the target — fills
+      // can't drag mid away because requoteBot also guards against
+      // price-discovery overrides when a target is active.
+      state.mid = state.targetMid + z * p.tickSigma * 0.15;
+    } else {
+      // Normal random walk
+      state.mid += z * p.tickSigma;
+
+      // Occasional shock
+      if (Math.random() < p.shockProb) {
+        state.mid += this.gaussianRandom() * p.shockSigma;
+      }
     }
 
-    this.mid = Math.max(0.01, this.mid);
+    state.mid = Math.max(0.01, state.mid);
   }
 
   /** Box-Muller transform → standard normal sample */
@@ -274,18 +369,125 @@ export class BotSimulationService {
     environmentId: string,
     stockId: string,
     bot: BotState,
+    state: MarketMakerSimState,
+    lastTradePrice: number | null = null,
   ): Promise<void> {
     // Cancel previous quotes (fire-and-forget, may already be filled)
-    await this.cancelQuote(bot);
+    // When target is active, bulk cancel already happened in runTick
+    if (state.targetMid === null) {
+      await this.cancelQuote(bot);
+    }
 
-    const p = this.profile;
+    const p = state.profile;
+
+    if (state.targetMid !== null) {
+      // ── TARGET MODE ──
+      // Use the actual last trade price (from the DB) to measure the real
+      // distance to target.  state.mid is snapped to target by evolveMidPrice()
+      // so it can NOT be used here — that was the original bug.
+      //
+      // Strategy:
+      //   FAR from target → sweep + opposite-side stabilise.
+      //     The sweep consumes stale orders at the old price.
+      //     The stabilise creates resting orders at the target price so that
+      //     the NEXT bot's sweep crosses them, recording a trade at the target.
+      //   NEAR target → tight two-sided quotes to maintain the new level.
+      const target = state.targetMid;
+      const marketPrice = lastTradePrice ?? state.mid;
+      const gap = target - marketPrice;
+      const nearTarget = Math.abs(gap) < target * 0.03; // within 3%
+
+      if (nearTarget) {
+        // ── STABILISATION: tight two-sided quotes at target ──
+        const bidPrice = +(target - 0.02).toFixed(2);
+        const askPrice = +(target + 0.02).toFixed(2);
+        const units = Math.max(1, bot.quoteSize);
+
+        try {
+          const r = await this.orderExecutionService.placeAndExecuteOrder(
+            environmentId, bot.participantId, stockId, 'buy', bidPrice, units,
+          );
+          if (r.success && r.order) {
+            bot.quote.bidOrderId = r.order.id;
+            if (r.tradesExecuted && r.tradesExecuted > 0) bot.inventory += units;
+          }
+        } catch { /* skip */ }
+
+        try {
+          const r = await this.orderExecutionService.placeAndExecuteOrder(
+            environmentId, bot.participantId, stockId, 'sell', askPrice, units,
+          );
+          if (r.success && r.order) {
+            bot.quote.askOrderId = r.order.id;
+            if (r.tradesExecuted && r.tradesExecuted > 0) bot.inventory -= units;
+          }
+        } catch { /* skip */ }
+
+      } else if (gap > 0) {
+        // ── TARGET IS ABOVE: sweep buy + stabilise sell ──
+        // The sweep buy consumes stale sell orders below the target.
+        // The stabilise sell creates a resting order at the target so that
+        // the next bot's sweep buy crosses it → trade records at the target.
+        const sweepPrice = +(target + 0.05).toFixed(2);
+        const stabilisePrice = +(target + 0.02).toFixed(2);
+
+        try {
+          const r = await this.orderExecutionService.placeAndExecuteOrder(
+            environmentId, bot.participantId, stockId, 'buy', sweepPrice, 20,
+          );
+          if (r.success && r.order) {
+            bot.quote.bidOrderId = r.order.id;
+            if (r.tradesExecuted && r.tradesExecuted > 0) bot.inventory += 20;
+          }
+        } catch { /* insufficient cash — skip */ }
+
+        try {
+          const r = await this.orderExecutionService.placeAndExecuteOrder(
+            environmentId, bot.participantId, stockId, 'sell', stabilisePrice, 5,
+          );
+          if (r.success && r.order) {
+            bot.quote.askOrderId = r.order.id;
+            if (r.tradesExecuted && r.tradesExecuted > 0) bot.inventory -= 5;
+          }
+        } catch { /* insufficient shares — skip */ }
+
+      } else {
+        // ── TARGET IS BELOW: sweep sell + stabilise buy ──
+        const sweepPrice = Math.max(0.01, +(target - 0.05).toFixed(2));
+        const stabilisePrice = +(target - 0.02).toFixed(2);
+
+        try {
+          const r = await this.orderExecutionService.placeAndExecuteOrder(
+            environmentId, bot.participantId, stockId, 'sell', sweepPrice, 20,
+          );
+          if (r.success && r.order) {
+            bot.quote.askOrderId = r.order.id;
+            if (r.tradesExecuted && r.tradesExecuted > 0) bot.inventory -= 20;
+          }
+        } catch { /* insufficient shares — skip */ }
+
+        try {
+          const r = await this.orderExecutionService.placeAndExecuteOrder(
+            environmentId, bot.participantId, stockId, 'buy', stabilisePrice, 5,
+          );
+          if (r.success && r.order) {
+            bot.quote.bidOrderId = r.order.id;
+            if (r.tradesExecuted && r.tradesExecuted > 0) bot.inventory += 5;
+          }
+        } catch { /* insufficient cash — skip */ }
+      }
+
+      return;
+    }
+
+    // ── NORMAL MODE ──
     const halfSpread = p.baseHalfSpread * bot.spreadMultiplier;
     const skew = bot.inventory * p.inventorySkewPerUnit;
     const bidJitter = Math.random() * p.jitter;
     const askJitter = Math.random() * p.jitter;
 
-    const rawBid = this.mid - halfSpread - bidJitter - skew;
-    const rawAsk = this.mid + halfSpread + askJitter - skew;
+    const rawBid = state.mid - halfSpread - bidJitter - skew;
+    const rawAsk = state.mid + halfSpread + askJitter - skew;
 
     const bidPrice = Math.max(0.01, +rawBid.toFixed(2));
     const askPrice = Math.max(bidPrice + 0.01, +rawAsk.toFixed(2));
@@ -301,7 +503,7 @@ export class BotSimulationService {
         bot.quote.bidOrderId = bidResult.order.id;
         if (bidResult.tradesExecuted && bidResult.tradesExecuted > 0) {
           bot.inventory += units;
-          this.mid = bidPrice; // price discovery
+          state.mid = bidPrice;
         }
       }
     } catch { /* validation failure — skip */ }
@@ -315,10 +517,41 @@ export class BotSimulationService {
         bot.quote.askOrderId = askResult.order.id;
         if (askResult.tradesExecuted && askResult.tradesExecuted > 0) {
           bot.inventory -= units;
-          this.mid = askPrice; // price discovery
+          state.mid = askPrice;
         }
       }
     } catch { /* validation failure — skip */ }
+  }
+
+  /**
+   * Cancel ALL open orders on the wrong side of the target price.
+   * This instantly clears the stale order book so the price converges
+   * within 1-2 ticks instead of slowly sweeping through orders.
+   */
+  private async cancelStaleOrders(
+    environmentId: string,
+    stockId: string,
+    target: number,
+  ): Promise<void> {
+    try {
+      const orders = await this.supabaseService.getEnvironmentOpenOrders(environmentId, stockId);
+      const trades = await this.supabaseService.getEnvironmentTrades(environmentId, stockId, 1);
+      const currentPrice = trades.length > 0 ? Number(trades[0].price) : target;
+
+      const cancels: Promise<boolean>[] = [];
+      for (const order of orders) {
+        const price = Number(order.price);
+        const shouldCancel =
+          (target > currentPrice && order.type === 'sell' && price < target) ||
+          (target < currentPrice && order.type === 'buy' && price > target);
+        if (shouldCancel) {
+          cancels.push(this.supabaseService.cancelEnvironmentOrder(order.id));
+        }
+      }
+      await Promise.all(cancels);
+    } catch {
+      /* best-effort — stale orders will be swept on next tick */
+    }
   }
 
   private async cancelQuote(bot: BotState): Promise<void> {

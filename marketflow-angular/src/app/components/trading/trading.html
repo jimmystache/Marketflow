@@ -412,7 +412,7 @@
         </div>
         
         <!-- Stock Selector -->
-        <div class="stock-selector" *ngIf="environmentStocks.length > 1"
+        <div id="wt-stock-selector" class="stock-selector" *ngIf="environmentStocks.length > 1"
             (mouseenter)="showHelp($event, 'You can use this to change the current stock.')"
             (mouseleave)="closeTooltip()">
           <select [(ngModel)]="selectedStockId" (change)="onStockSelectChange()">
@@ -444,21 +444,6 @@
             <path d="m3 11 18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>
           </svg>
           Broadcast
-        </button>
-
-        <!-- Retail Investor Simulation Button (Admin Only) -->
-        <button *ngIf="isAdmin" class="retail-sim-btn" [class.active]="isRetailSimRunning"
-                (click)="toggleRetailSimulation()"
-                (mouseenter)="showHelp($event, 'Simulate retail investors placing random trades to drive price movement.')"
-                (mouseleave)="closeTooltip()"
-                title="Toggle retail investor simulation">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
-          {{ isRetailSimRunning ? 'Stop Retail' : 'Retail Sim' }}
         </button>
 
         <!-- Message History Button (All Users) -->
@@ -581,7 +566,8 @@
     <!-- Left Panel - Account & Order Entry -->
     <aside class="left-panel">
       <!-- Account Summary -->
-      <div 
+      <div
+      id="wt-account"
       class="account-summary"
       (mouseenter)="showHelp($event, 'This shows your cash balances')"
       (mouseleave)="closeTooltip()"
@@ -610,7 +596,8 @@
       </div>
 
       <!-- Order Entry -->
-      <div 
+      <div
+      id="wt-order-entry"
       class="order-entry">
         <div 
         class="symbol-display"
@@ -705,7 +692,7 @@
         </div>
 
         <!-- Place Order Button -->
-        <button 
+        <button
           class="place-order-btn"
           (mouseenter)="showHelp($event, 'Click me to place your buy or sell orders.')"
           (mouseleave)="closeTooltip()"
@@ -718,6 +705,86 @@
           <span *ngIf="isPlacingOrder">PLACING ORDER...</span>
           <span *ngIf="isPaused && !isPlacingOrder">TRADING PAUSED</span>
         </button>
+      </div>
+
+      <!-- Bot Controls (Admin Only) -->
+      <div *ngIf="isAdmin" class="bot-controls-section" id="wt-bot-controls">
+        <div class="bot-controls-header">BOT SIMULATION</div>
+
+        <!-- Market-Maker Bots -->
+        <div class="bot-subsection">
+          <label class="bot-subsection-label">MARKET MAKER</label>
+          <div class="bot-row">
+            <select [(ngModel)]="mmBotTargetStockId" class="bot-stock-select">
+              <option *ngFor="let s of environmentStocks" [value]="s.id">{{ s.symbol }}</option>
+            </select>
+            <select [(ngModel)]="mmBotVolatility" class="bot-vol-select">
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+              <option value="extreme">Extreme</option>
+            </select>
+          </div>
+          <button class="bot-toggle-btn" [class.active]="activeMmSimStocks.has(mmBotTargetStockId)"
+                  (click)="toggleMmSimulation()">
+            {{ activeMmSimStocks.has(mmBotTargetStockId) ? 'STOP MARKET MAKER' : 'START MARKET MAKER' }}
+          </button>
+          <span *ngIf="activeMmSimStocks.size > 0" class="active-sims-badge">
+            {{ activeMmSimStocks.size }} stocks running
+          </span>
+        </div>
+
+        <!-- Retail Bots -->
+        <div class="bot-subsection">
+          <label class="bot-subsection-label">RETAIL INVESTORS</label>
+          <div class="bot-row">
+            <select [(ngModel)]="retailBotTargetStockId" class="bot-stock-select">
+              <option *ngFor="let s of environmentStocks" [value]="s.id">{{ s.symbol }}</option>
+            </select>
+            <select [(ngModel)]="retailAsymmetry" class="bot-vol-select">
+              <option value="low">Low Volatility</option>
+              <option value="medium">Medium Volatility</option>
+              <option value="high">High Volatility</option>
+            </select>
+          </div>
+          <button class="bot-toggle-btn" [class.active]="activeRetailSimStocks.has(retailBotTargetStockId)"
+                  (click)="toggleRetailSimulation()">
+            {{ activeRetailSimStocks.has(retailBotTargetStockId) ? 'STOP RETAIL' : 'START RETAIL' }}
+          </button>
+          <span *ngIf="activeRetailSimStocks.size > 0" class="active-sims-badge">
+            {{ activeRetailSimStocks.size }} stocks running
+          </span>
+        </div>
+
+        <!-- Shared Controls -->
+        <div class="bot-shared-controls">
+          <div class="bot-speed-row">
+            <label class="bot-speed-label">TICK SPEED</label>
+            <input type="range" class="bot-speed-slider"
+                   [(ngModel)]="botTickSpeedMs" min="200" max="1400" step="100">
+            <span class="bot-speed-value">{{ botTickSpeedMs }}ms</span>
+          </div>
+          <div class="bot-target-section">
+            <div class="bot-target-header">
+              <label class="bot-speed-label">TARGET PRICE</label>
+              <button class="bot-target-toggle"
+                      [class.active]="botTargetEnabled"
+                      (click)="toggleBotTarget()">
+                {{ botTargetEnabled ? 'ON' : 'OFF' }}
+              </button>
+            </div>
+            <div class="bot-target-input-row">
+              <input type="number" class="bot-price-input"
+                     [(ngModel)]="botTargetPrice" min="0.01" step="0.01"
+                     [disabled]="!botTargetEnabled"
+                     placeholder="e.g. 90">
+              <button class="bot-confirm-btn"
+                      [disabled]="!botTargetEnabled || botTargetPrice <= 0"
+                      (click)="syncBotTargetPrice()">
+                SET
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </aside>
 
@@ -840,7 +907,7 @@
             [disabled]="isSettlingOrderBook || isMatchingSweepRunning"
             (click)="settleOrderBook()"
             title="Match all crossing orders now">
-            {{ isSettlingOrderBook ? 'Settling...' : '⚡ Settle' }}
+            {{ isSettlingOrderBook ? 'Settling...' : 'Settle' }}
           </button>
         </div>
 

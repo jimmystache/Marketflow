@@ -40,6 +40,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
   isExpanded = false;
   private globalClickUnlisten: (() => void) | null = null;
   messages: ChatMessage[] = [];
+  seenMessageCount = 0;
   userInput = '';
   
   // Mode: command or analysis
@@ -84,8 +85,8 @@ export class ChatAssistant implements OnInit, OnDestroy {
 
   ngOnInit(): void {
      const welcome = `<b>Hey!</b> I can help you trade and analyze markets.<br>
-      <b>🔷 Command Mode:</b> Execute trades, manage positions, run bot simulations<br>
-      <b>🔷 Analysis Mode:</b> Get AI-powered market insights, predictions, and advice<br>
+      <b>Command Mode:</b> Execute trades, manage positions, run bot simulations<br>
+      <b>Analysis Mode:</b> Get AI-powered market insights, predictions, and advice<br>
         <b>Command:</b> buy 10 at $50, what's my position, run bot simulation<br>
       <b>Analysis:</b> what's the market trend?, should I buy now?, predict price movement<br>
       <b>For commands :</b> type 'help'
@@ -123,7 +124,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
       this.globalClickUnlisten = null;
     }
     // Stop any running bot simulation
-    this.botSimulationService.stopSimulation();
+    this.botSimulationService.stopAll();
   }
   
   /**
@@ -193,8 +194,13 @@ export class ChatAssistant implements OnInit, OnDestroy {
     }
   }
 
+  get unreadCount(): number {
+    return Math.max(0, this.messages.length - this.seenMessageCount);
+  }
+
   openChat(): void {
     this.isExpanded = true;
+    this.seenMessageCount = this.messages.length;
     // Listen for clicks outside
     if (!this.globalClickUnlisten) {
       this.globalClickUnlisten = this.renderer.listen('document', 'mousedown', (event: MouseEvent) => {
@@ -312,11 +318,11 @@ export class ChatAssistant implements OnInit, OnDestroy {
    */
   async processAnalysisQuery(query: string): Promise<void> {
     if (!this.currentEnvironment || !this.currentStock) {
-      this.addMessage('⚠️ Please navigate to the trading page first to set your environment and stock context.', 'assistant');
+      this.addMessage('Please navigate to the trading page first to set your environment and stock context.', 'assistant');
       return;
     }
 
-    this.addMessage('🤔 Analyzing market data...', 'assistant');
+    this.addMessage('Analyzing market data...', 'assistant');
 
     try {
       // Gather market context
@@ -345,10 +351,10 @@ export class ChatAssistant implements OnInit, OnDestroy {
       } else if (response.isRejection) {
         this.addMessage(response.error!, 'assistant');
       } else {
-        this.addMessage(`❌ ${response.error}`, 'assistant');
+        this.addMessage(`Error: ${response.error}`, 'assistant');
       }
     } catch (error: any) {
-      this.addMessage(`❌ Analysis failed: ${error.message}`, 'assistant');
+      this.addMessage(`Analysis failed: ${error.message}`, 'assistant');
     }
   }
 
@@ -540,16 +546,17 @@ export class ChatAssistant implements OnInit, OnDestroy {
         const ctx = this.tradingContextService.getContext();
         if (!ctx.environmentId) {
           this.addMessage(
-            '⚠️ The walkthrough only works inside a trading environment. ' +
+            'The walkthrough only works inside a trading environment. ' +
             'Join one first, then type <b>walk</b> again.',
             'assistant'
           );
         } else {
           this.addMessage(
-            '🎯 Starting the tour follow the highlighted sections! Click <b>Next</b> to advance.',
+            'Starting the tour - follow the highlighted sections! Click <b>Next</b> to advance.',
             'assistant'
           );
           this.closeChat();
+          this.walkthroughService.configure(!!this.currentParticipant?.is_admin);
           this.walkthroughService.start();
         }
         return;
@@ -596,7 +603,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
       this.currentEnvironment = env;
       this.addMessage(`✓ Environment set: ${env.name} (${env.symbol})`, 'assistant');
     } else {
-      this.addMessage('❌ Environment not found', 'assistant');
+      this.addMessage('Environment not found', 'assistant');
     }
   }
 
@@ -621,7 +628,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
         partId
       );
     } else {
-      this.addMessage('❌ Participant not found', 'assistant');
+      this.addMessage('Participant not found', 'assistant');
     }
   }
 
@@ -639,7 +646,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
       this.currentStock = stock;
       this.addMessage(`✓ Stock set: ${stock.symbol} - ${stock.name}`, 'assistant');
     } else {
-      this.addMessage('❌ Stock not found in current environment', 'assistant');
+      this.addMessage('Stock not found in current environment', 'assistant');
     }
   }
 
@@ -801,11 +808,11 @@ export class ChatAssistant implements OnInit, OnDestroy {
           this.currentStock!.id
         );
       } else {
-        this.addMessage(`❌ ${result.message}`, 'assistant');
+        this.addMessage(`Error: ${result.message}`, 'assistant');
       }
     } catch (error: any) {
       console.error('Error executing order:', error);
-      this.addMessage(`❌ Failed to execute order: ${error.message || 'Unknown error'}`, 'assistant');
+      this.addMessage(`Failed to execute order: ${error.message || 'Unknown error'}`, 'assistant');
     } finally {
       // Always clear execution state
       this.isExecutingOrder = false;
@@ -846,7 +853,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
       const avgPrice = Number(position.avg_price);
       const units = position.units;
       this.addMessage(
-        `📊 Position in ${this.currentStock!.symbol}:\n` +
+        `Position in ${this.currentStock!.symbol}:\n` +
         `Units: ${units}\n` +
         `Avg Price: $${avgPrice.toFixed(2)}\n` +
         `Total Value: $${(units * avgPrice).toFixed(2)}`,
@@ -872,10 +879,10 @@ export class ChatAssistant implements OnInit, OnDestroy {
     if (this.currentStock) {
       const stock = await this.supabaseService.getEnvironmentStock(this.currentStock.id);
       const symbol = stock ? stock.symbol : this.currentStock.symbol;
-      this.addMessage(`🌍 ${env.name}\nStock: ${symbol}`, 'assistant');
+      this.addMessage(`${env.name}\nStock: ${symbol}`, 'assistant');
     } else {
       // If no stock selected, fall back to environment symbol
-      this.addMessage(`🌍 ${env.name}\nSymbol: ${env.symbol}`, 'assistant');
+      this.addMessage(`${env.name}\nSymbol: ${env.symbol}`, 'assistant');
     }
   }
 
@@ -904,7 +911,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
       : 0;
 
     this.addMessage(
-      `📈 Trading Stats:\n` +
+      `Trading Stats:\n` +
       `Total Trades: ${trades.length}\n` +
       `Buy Trades: ${buyTrades.length} (${totalBought} units @ avg $${avgBuyPrice.toFixed(2)})\n` +
       `Sell Trades: ${sellTrades.length} (${totalSold} units @ avg $${avgSellPrice.toFixed(2)})`,
@@ -922,7 +929,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
     }
 
     this.addMessage(
-      `💰 Cash Balance:\n` +
+      `Cash Balance:\n` +
       `Available: $${this.currentParticipant.available_cash.toFixed(2)}\n` +
       `Settled: $${this.currentParticipant.settled_cash.toFixed(2)}\n` +
       `Total: $${this.currentParticipant.cash.toFixed(2)}`,
@@ -947,7 +954,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
       return;
     }
 
-    let message = `📊 Recent Trades (${this.currentStock!.symbol}):\n`;
+    let message = `Recent Trades (${this.currentStock!.symbol}):\n`;
     trades.slice(0, 5).forEach((trade, idx) => {
       message += `${idx + 1}. ${trade.units} @ $${Number(trade.price).toFixed(2)}\n`;
     });
@@ -960,12 +967,12 @@ export class ChatAssistant implements OnInit, OnDestroy {
    */
   showHelp(): void {
     const hasContext = this.currentEnvironment && this.currentParticipant && this.currentStock;
-    const contextNote = hasContext 
-      ? '✓ Context auto-detected from trading page\n\n' 
-      : '⚠️ Context not detected. Use "set" commands or navigate to trading page.\n\n';
-    
+    const contextNote = hasContext
+      ? '✓ Context auto-detected from trading page\n\n'
+      : 'Context not detected. Use "set" commands or navigate to trading page.\n\n';
+
     this.addMessage(
-      '🤖 Available Commands:\n' +
+      'Available Commands:\n' +
       'Trading:\n' +
       '• buy [quantity] at $[price]\n' +
       '• buy [quantity] at ask\n' +
@@ -1023,19 +1030,19 @@ export class ChatAssistant implements OnInit, OnDestroy {
    */
   async runBotSimulation(volatility: 'normal' | 'high' | 'extreme', duration: number): Promise<void> {
     if (this.botSimulationRunning) {
-      this.addMessage('❌ Bot simulation is already running. Please wait for it to complete.', 'assistant');
+      this.addMessage('Bot simulation is already running. Please wait for it to complete.', 'assistant');
       return;
     }
 
     if (!this.currentEnvironment || !this.currentStock) {
-      this.addMessage('❌ Missing environment or stock context', 'assistant');
+      this.addMessage('Missing environment or stock context', 'assistant');
       return;
     }
 
     this.botSimulationRunning = true;
-    const volatilityLabel = volatility === 'extreme' ? '🔥 EXTREME' : volatility === 'high' ? '⚡ HIGH' : '⚪ NORMAL';
+    const volatilityLabel = volatility.toUpperCase();
     this.addMessage(
-      `🤖 Starting bot simulation...\n${volatilityLabel} volatility for ${duration} seconds\nEnvironment: ${this.currentEnvironment.name}\nStock: ${this.currentStock.symbol}`,
+      `Starting bot simulation...\n${volatilityLabel} volatility for ${duration} seconds\nEnvironment: ${this.currentEnvironment.name}\nStock: ${this.currentStock.symbol}`,
       'assistant'
     );
 
@@ -1043,13 +1050,13 @@ export class ChatAssistant implements OnInit, OnDestroy {
       // Call the demo-bots script via a backend endpoint or execute directly
       // For now, we'll simulate the command being run
       const result = await this.executeBotScript(volatility, duration);
-      
+
       this.addMessage(
-        `✅ Bot simulation ${result.success ? 'started successfully' : 'failed'}\n${result.message}`,
+        `Bot simulation ${result.success ? 'started successfully' : 'failed'}\n${result.message}`,
         'assistant'
       );
     } catch (error: any) {
-      this.addMessage(`❌ Failed to start bot simulation: ${error.message}`, 'assistant');
+      this.addMessage(`Failed to start bot simulation: ${error.message}`, 'assistant');
     } finally {
       // Reset after duration, but only if not stopped
       if (this.botSimulationTimeout) {
@@ -1059,7 +1066,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
       this.botSimulationTimeout = setTimeout(() => {
         if (this.botSimulationRunning) {
           this.botSimulationRunning = false;
-          this.addMessage('🤖 Bot simulation completed', 'assistant');
+          this.addMessage('Bot simulation completed', 'assistant');
         }
         this.botSimulationTimeout = null;
       }, duration * 1000);
@@ -1119,13 +1126,13 @@ export class ChatAssistant implements OnInit, OnDestroy {
    * Stop the current bot simulation
    */
   stopSimulation(): void {
-    this.botSimulationService.stopSimulation();
+    this.botSimulationService.stopAll();
     this.botSimulationRunning = false;
     if (this.botSimulationTimeout) {
       clearTimeout(this.botSimulationTimeout);
       this.botSimulationTimeout = null;
     }
-    this.addMessage('🛑 Bot simulation stopped', 'assistant');
+    this.addMessage('Bot simulation stopped', 'assistant');
   }
 
   /**
@@ -1133,15 +1140,15 @@ export class ChatAssistant implements OnInit, OnDestroy {
    */
   validateContext(): boolean {
     if (!this.currentEnvironment) {
-      this.addMessage('⚠️ No environment context. Please navigate to the trading page or use "set environment [id]"', 'assistant');
+      this.addMessage('No environment context. Please navigate to the trading page or use "set environment [id]"', 'assistant');
       return false;
     }
     if (!this.currentParticipant) {
-      this.addMessage('⚠️ No participant context. Please navigate to the trading page or use "set participant [id]"', 'assistant');
+      this.addMessage('No participant context. Please navigate to the trading page or use "set participant [id]"', 'assistant');
       return false;
     }
     if (!this.currentStock) {
-      this.addMessage('⚠️ No stock selected. Please select a stock on the trading page or use "set stock [id]"', 'assistant');
+      this.addMessage('No stock selected. Please select a stock on the trading page or use "set stock [id]"', 'assistant');
       return false;
     }
     return true;
