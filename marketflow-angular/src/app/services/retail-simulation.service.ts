@@ -18,10 +18,22 @@ import { OrderExecutionService } from './order-execution.service';
  * internal Map keyed by stockId.
  */
 
+type RetailPersonality = 'momentum' | 'contrarian' | 'fomo' | 'passive';
+
 interface RetailBot {
   participantId: string;
   traderId: string;
   username: string;
+  /** Behavioural archetype — determines direction bias and aggression */
+  personality: RetailPersonality;
+  /** 0.3–1.0 — scales order size (low = small orders, high = large) */
+  riskTolerance: number;
+  /** 0.2–0.8 — base probability of trading on any given tick */
+  activityRate: number;
+  /** Ticks remaining before this bot will consider trading again */
+  cooldownTicks: number;
+  /** Tracks what this bot did last (for momentum/contrarian logic) */
+  lastDirection: 'buy' | 'sell' | null;
 }
 
 export type AsymmetryLevel = 'low' | 'medium' | 'high';
@@ -50,7 +62,7 @@ interface StockSimState {
   environmentId: string;
   bots: RetailBot[];
   timeoutHandle: any;
-  /** Sentiment bias: 0 = neutral, positive = bullish, negative = bearish */
+  /** Sentiment bias: positive = bullish, negative = bearish */
   sentiment: number;
   endTime: number;
   /** Target tick interval in ms (jitter ±40% applied on top) */
@@ -58,6 +70,14 @@ interface StockSimState {
   /** Optional target price — when set, retail bots bias toward this price */
   targetMid: number | null;
   asymmetry: AsymmetryLevel;
+  /** Recent price change as a fraction (e.g. 0.03 = 3% up) for momentum detection */
+  recentPriceChange: number;
+  /** Last known mid-price for tracking direction */
+  lastMidPrice: number | null;
+  /** Market regime: 'bull' trends up, 'bear' trends down */
+  regime: 'bull' | 'bear';
+  /** Ticks remaining in the current regime before a switch can happen */
+  regimeTicksLeft: number;
 }
 
 @Injectable({
@@ -96,6 +116,10 @@ export class RetailSimulationService {
         tickSpeedMs,
         targetMid: null,
         asymmetry,
+        recentPriceChange: 0,
+        lastMidPrice: null,
+        regime: Math.random() < 0.6 ? 'bull' : 'bear',
+        regimeTicksLeft: 150 + Math.floor(Math.random() * 200),
       };
       this.stockSimulations.set(stockId, state);
       this.scheduleNext(environmentId, stockId);
@@ -155,6 +179,18 @@ export class RetailSimulationService {
 
   // ─────────────── init ───────────────
 
+  private static readonly PERSONALITIES: RetailPersonality[] = [
+    'momentum', 'contrarian', 'fomo', 'passive',
+  ];
+
+  /** Personality-specific defaults for risk and activity */
+  private static readonly PERSONALITY_TRAITS: Record<RetailPersonality, { riskRange: [number, number]; activityRange: [number, number] }> = {
+    momentum:   { riskRange: [0.5, 0.9], activityRange: [0.4, 0.7] },
+    contrarian: { riskRange: [0.4, 0.7], activityRange: [0.3, 0.5] },
+    fomo:       { riskRange: [0.6, 1.0], activityRange: [0.3, 0.6] },
+    passive:    { riskRange: [0.3, 0.5], activityRange: [0.15, 0.35] },
+  };
+
   private async initBots(
     environmentId: string,
     stockId: string,
@@ -185,14 +221,24 @@ export class RetailSimulationService {
         environment.starting_shares || 100,
       );
 
+      const personality = RetailSimulationService.PERSONALITIES[i % RetailSimulationService.PERSONALITIES.length];
+      const traits = RetailSimulationService.PERSONALITY_TRAITS[personality];
+      const riskTolerance = traits.riskRange[0] + Math.random() * (traits.riskRange[1] - traits.riskRange[0]);
+      const activityRate = traits.activityRange[0] + Math.random() * (traits.activityRange[1] - traits.activityRange[0]);
+
       bots.push({
         participantId: participant.id,
         traderId: trader.id,
         username,
+        personality,
+        riskTolerance,
+        activityRate,
+        cooldownTicks: 0,
+        lastDirection: null,
       });
     }
 
-    console.log(`✓ Initialised ${count} retail investor bots for stock ${stockId}`);
+    console.log(`✓ Initialised ${count} retail investor bots for stock ${stockId}: ${bots.map(b => b.personality).join(', ')}`);
     return bots;
   }
 
@@ -221,22 +267,83 @@ export class RetailSimulationService {
       return;
     }
 
-    // Drift sentiment (parameters scaled by information asymmetry level)
+    // Regime-switching sentiment model:
+    // Long bull/bear phases with occasional regime flips.
+    // Sentiment drifts in the regime direction with noise, NOT mean-reverting to zero.
     const cfg = ASYMMETRY_CONFIGS[state.asymmetry];
-    state.sentiment += (Math.random() - 0.5) * cfg.sentimentStep;
-    state.sentiment *= cfg.meanReversion;
+
+    state.regimeTicksLeft--;
+    if (state.regimeTicksLeft <= 0) {
+      // Flip regime. Bear phases are shorter than bull phases (realistic).
+      state.regime = state.regime === 'bull' ? 'bear' : 'bull';
+      state.regimeTicksLeft = state.regime === 'bull'
+        ? 200 + Math.floor(Math.random() * 300)   // bull: 200–500 ticks
+        : 80 + Math.floor(Math.random() * 120);   // bear: 80–200 ticks
+    }
+
+    // Drift sentiment toward regime direction with noise
+    const regimeBias = state.regime === 'bull' ? 0.12 : -0.18; // bears are steeper
+    state.sentiment += regimeBias * cfg.sentimentStep + (Math.random() - 0.5) * cfg.sentimentStep * 0.4;
+    // Soft clamp to prevent runaway
+    state.sentiment = Math.max(-3, Math.min(3, state.sentiment));
+
+    // Compute recent price momentum from last few trades
+    await this.updateMomentum(environmentId, stockId, state);
+
+    // Early-exit if stopped mid-tick
+    if (!this.stockSimulations.has(stockId)) return;
 
     // When a target is active, sweep any mispriced orders first
     if (state.targetMid !== null) {
       await this.sweepMispricedOrders(environmentId, stockId, state);
     }
 
-    // Then continue with normal single-bot order (90/10 biased when target is active)
-    const bot = state.bots[Math.floor(Math.random() * state.bots.length)];
+    // Early-exit if stopped mid-tick
+    if (!this.stockSimulations.has(stockId)) return;
 
-    await this.placeRetailOrder(environmentId, stockId, bot, state.sentiment, state.targetMid, state.asymmetry);
+    // Fetch order book once for all bots this tick
+    let openOrders: any[];
+    try {
+      openOrders = await this.supabaseService.getEnvironmentOpenOrders(environmentId, stockId);
+    } catch {
+      if (this.stockSimulations.has(stockId)) this.scheduleNext(environmentId, stockId);
+      return;
+    }
 
-    this.scheduleNext(environmentId, stockId);
+    // ALL bots fire every tick — in parallel
+    await Promise.all(
+      state.bots.map(bot => this.placeRetailOrder(environmentId, stockId, bot, state, openOrders))
+    );
+
+    // Only schedule next if still running
+    if (this.stockSimulations.has(stockId)) {
+      this.scheduleNext(environmentId, stockId);
+    }
+  }
+
+  // ─────────────── momentum tracking ───────────────
+
+  /**
+   * Compute recent price change from the last 5 trades.
+   * Updates state.recentPriceChange (fractional, e.g. 0.03 = +3%)
+   * and state.lastMidPrice.
+   */
+  private async updateMomentum(
+    environmentId: string,
+    stockId: string,
+    state: StockSimState,
+  ): Promise<void> {
+    try {
+      const trades = await this.supabaseService.getEnvironmentTrades(environmentId, stockId, 5);
+      if (trades.length >= 2) {
+        const newest = Number(trades[0].price);
+        const oldest = Number(trades[trades.length - 1].price);
+        state.recentPriceChange = oldest > 0 ? (newest - oldest) / oldest : 0;
+        state.lastMidPrice = newest;
+      }
+    } catch {
+      // Best-effort — keep previous values
+    }
   }
 
   // ─────────────── sweep mispriced orders ───────────────
@@ -313,81 +420,199 @@ export class RetailSimulationService {
   // ─────────────── order placement ───────────────
 
   /**
-   * Place a single aggressive (marketable) order.
-   * - Looks at the current best bid / best ask
-   * - Chooses buy or sell based on sentiment + randomness
-   * - Prices the order to cross the spread so it executes immediately
+   * Personality-driven order placement.
+   * Each bot type makes decisions differently:
+   *   momentum  — chases trends (buy when rising, sell when falling)
+   *   contrarian — fades moves (buy dips, sell rips); occasionally places limit orders
+   *   fomo      — herds with recent majority direction
+   *   passive   — slight buy bias, small orders, infrequent
    */
   private async placeRetailOrder(
     environmentId: string,
     stockId: string,
     bot: RetailBot,
-    sentiment: number,
-    targetMid: number | null,
-    asymmetry: AsymmetryLevel,
+    state: StockSimState,
+    openOrders: any[],
   ): Promise<void> {
     try {
-      // Get current order book state
-      const openOrders = await this.supabaseService.getEnvironmentOpenOrders(
-        environmentId,
-        stockId,
-      );
-
       const bestAskOrder = openOrders
-        .filter(o => o.type === 'sell' && (o.status === 'open' || o.status === 'partial'))
-        .sort((a, b) => Number(a.price) - Number(b.price))[0];
+        .filter((o: any) => o.type === 'sell' && (o.status === 'open' || o.status === 'partial'))
+        .sort((a: any, b: any) => Number(a.price) - Number(b.price))[0];
 
       const bestBidOrder = openOrders
-        .filter(o => o.type === 'buy' && (o.status === 'open' || o.status === 'partial'))
-        .sort((a, b) => Number(b.price) - Number(a.price))[0];
+        .filter((o: any) => o.type === 'buy' && (o.status === 'open' || o.status === 'partial'))
+        .sort((a: any, b: any) => Number(b.price) - Number(a.price))[0];
 
-      if (!bestAskOrder && !bestBidOrder) return; // empty book, nothing to hit
+      if (!bestAskOrder && !bestBidOrder) return;
 
-      const acfg = ASYMMETRY_CONFIGS[asymmetry];
+      const acfg = ASYMMETRY_CONFIGS[state.asymmetry];
+      const priceChange = state.recentPriceChange;
+      const priceRising = priceChange > 0.005;
+      const priceFalling = priceChange < -0.005;
+
+      // ── Direction decision — personality-driven ──
       let wantsBuy: boolean;
 
-      if (targetMid !== null) {
-        // Target-aware mode: determine current price from best bid/ask midpoint
+      if (state.targetMid !== null) {
+        // Target mode: override personality to converge on target
         const bestAsk = bestAskOrder ? Number(bestAskOrder.price) : null;
         const bestBid = bestBidOrder ? Number(bestBidOrder.price) : null;
         const currentPrice = bestBid && bestAsk ? (bestBid + bestAsk) / 2
-          : bestAsk ?? bestBid ?? targetMid;
+          : bestAsk ?? bestBid ?? state.targetMid;
 
-        if (currentPrice < targetMid) {
+        if (currentPrice < state.targetMid) {
           wantsBuy = Math.random() < acfg.targetBias;
-        } else if (currentPrice > targetMid) {
+        } else if (currentPrice > state.targetMid) {
           wantsBuy = Math.random() < (1 - acfg.targetBias);
         } else {
-          const buyProb = 0.5 + sentiment * 0.15;
-          wantsBuy = Math.random() < Math.max(acfg.buyProbMin, Math.min(acfg.buyProbMax, buyProb));
+          wantsBuy = this.personalityDirection(bot, priceRising, priceFalling, state.sentiment);
         }
       } else {
-        const buyProb = 0.5 + sentiment * 0.15;
-        wantsBuy = Math.random() < Math.max(acfg.buyProbMin, Math.min(acfg.buyProbMax, buyProb));
+        wantsBuy = this.personalityDirection(bot, priceRising, priceFalling, state.sentiment);
       }
 
-      const units = 1 + Math.floor(Math.random() * acfg.maxOrderSize);
+      // ── Order size — log-normal distribution ──
+      const rawSize = Math.exp(this.gaussianRandom() * 0.6 + 0.7);
+      const units = Math.max(1, Math.min(acfg.maxOrderSize, Math.round(rawSize * bot.riskTolerance)));
 
+      // ── Aggression — personality-dependent ──
+      const aggressionRange = this.getAggressionRange(bot.personality, acfg);
+
+      // ── Contrarian limit order (30% of the time) ──
+      if (bot.personality === 'contrarian' && Math.random() < 0.3 && bestBidOrder && bestAskOrder) {
+        await this.placeContrarianLimit(environmentId, stockId, bot, bestBidOrder, bestAskOrder, priceRising, units);
+        bot.lastDirection = wantsBuy ? 'buy' : 'sell';
+        return;
+      }
+
+      // ── Market-crossing order ──
       if (wantsBuy && bestAskOrder) {
         const askPrice = Number(bestAskOrder.price);
-        const pctOffset = acfg.aggressionMin + Math.random() * (acfg.aggressionMax - acfg.aggressionMin);
+        const pctOffset = aggressionRange[0] + Math.random() * (aggressionRange[1] - aggressionRange[0]);
         const price = +(askPrice * (1 + pctOffset)).toFixed(2);
 
         await this.orderExecutionService.placeAndExecuteOrder(
           environmentId, bot.participantId, stockId, 'buy', price, units,
         );
+        bot.lastDirection = 'buy';
       } else if (!wantsBuy && bestBidOrder) {
         const bidPrice = Number(bestBidOrder.price);
-        const pctOffset = acfg.aggressionMin + Math.random() * (acfg.aggressionMax - acfg.aggressionMin);
+        const pctOffset = aggressionRange[0] + Math.random() * (aggressionRange[1] - aggressionRange[0]);
         const price = Math.max(0.01, +(bidPrice * (1 - pctOffset)).toFixed(2));
 
         await this.orderExecutionService.placeAndExecuteOrder(
           environmentId, bot.participantId, stockId, 'sell', price, units,
         );
+        bot.lastDirection = 'sell';
       }
-      // If the desired side has no counterparty, skip this tick
     } catch {
       // Validation failures (insufficient cash/shares) are expected — ignore
     }
+  }
+
+  // ─────────────── personality helpers ───────────────
+
+  /**
+   * Decide buy/sell direction based on bot personality and market conditions.
+   */
+  private personalityDirection(
+    bot: RetailBot,
+    priceRising: boolean,
+    priceFalling: boolean,
+    sentiment: number,
+  ): boolean {
+    switch (bot.personality) {
+      case 'momentum':
+        if (priceRising)  return Math.random() < 0.75;
+        if (priceFalling) return Math.random() < 0.25;
+        return Math.random() < 0.5 + sentiment * 0.15;
+
+      case 'contrarian':
+        if (priceRising)  return Math.random() < 0.30;
+        if (priceFalling) return Math.random() < 0.70;
+        return Math.random() < 0.5 + sentiment * 0.10;
+
+      case 'fomo':
+        // Herd with recent direction — follows what just happened
+        if (priceRising)  return Math.random() < 0.80;
+        if (priceFalling) return Math.random() < 0.20;
+        return Math.random() < 0.5 + sentiment * 0.20;
+
+      case 'passive':
+        // Slight buy bias regardless of conditions (dollar-cost averaging)
+        return Math.random() < 0.55;
+
+      default:
+        return Math.random() < 0.5;
+    }
+  }
+
+  /**
+   * Return [min, max] aggression as fraction of price, based on personality.
+   */
+  private getAggressionRange(
+    personality: RetailPersonality,
+    acfg: AsymmetryConfig,
+  ): [number, number] {
+    switch (personality) {
+      case 'momentum':
+      case 'fomo':
+        // More aggressive — cross the spread further
+        return [acfg.aggressionMin * 1.2, acfg.aggressionMax * 1.5];
+      case 'contrarian':
+        // Less aggressive — tighter crosses
+        return [acfg.aggressionMin * 0.5, acfg.aggressionMax * 0.7];
+      case 'passive':
+        return [acfg.aggressionMin, acfg.aggressionMax];
+      default:
+        return [acfg.aggressionMin, acfg.aggressionMax];
+    }
+  }
+
+  /**
+   * Contrarian bots occasionally place resting limit orders instead of
+   * market-crossing orders — waiting for the price to come to them.
+   */
+  private async placeContrarianLimit(
+    environmentId: string,
+    stockId: string,
+    bot: RetailBot,
+    bestBidOrder: any,
+    bestAskOrder: any,
+    priceRising: boolean,
+    units: number,
+  ): Promise<void> {
+    try {
+      if (priceRising) {
+        // Price going up → place a resting buy below current bid (wait for pullback)
+        const bidPrice = Number(bestBidOrder.price);
+        const offset = 0.005 + Math.random() * 0.01;
+        const price = Math.max(0.01, +(bidPrice * (1 - offset)).toFixed(2));
+        await this.orderExecutionService.placeAndExecuteOrder(
+          environmentId, bot.participantId, stockId, 'buy', price, units,
+        );
+        bot.lastDirection = 'buy';
+      } else {
+        // Price going down or flat → place a resting sell above current ask (wait for bounce)
+        const askPrice = Number(bestAskOrder.price);
+        const offset = 0.005 + Math.random() * 0.01;
+        const price = +(askPrice * (1 + offset)).toFixed(2);
+        await this.orderExecutionService.placeAndExecuteOrder(
+          environmentId, bot.participantId, stockId, 'sell', price, units,
+        );
+        bot.lastDirection = 'sell';
+      }
+    } catch {
+      // Insufficient funds — skip
+    }
+  }
+
+  // ─────────────── math helpers ───────────────
+
+  /** Box-Muller transform → standard normal sample */
+  private gaussianRandom(): number {
+    const u1 = Math.random() || 1e-10;
+    const u2 = Math.random();
+    return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
   }
 }

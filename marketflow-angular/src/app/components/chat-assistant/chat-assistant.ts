@@ -13,6 +13,7 @@ import {
 import { TradingContextService } from '../../services/trading-context.service';
 import { OrderExecutionService } from '../../services/order-execution.service';
 import { BotSimulationService } from '../../services/bot-simulation.service';
+import { RetailSimulationService } from '../../services/retail-simulation.service';
 import { GrokAiService, MarketContext } from '../../services/grok-ai.service';
 import { WalkthroughService } from '../../services/walkthrough.service';
 
@@ -63,6 +64,10 @@ export class ChatAssistant implements OnInit, OnDestroy {
   // Bot simulation state
   botSimulationRunning = false;
   private botSimulationTimeout: any = null;
+
+  // Demo state
+  demoRunning = false;
+  private demoTimeout: any = null;
   
   // Order execution state
   isExecutingOrder = false;
@@ -78,6 +83,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
     private elRef: ElementRef,
     private renderer: Renderer2,
     private botSimulationService: BotSimulationService,
+    private retailSimulationService: RetailSimulationService,
     private grokAiService: GrokAiService,
     private walkthroughService: WalkthroughService
   ) {}
@@ -89,6 +95,7 @@ export class ChatAssistant implements OnInit, OnDestroy {
       <b>Analysis Mode:</b> Get AI-powered market insights, predictions, and advice<br>
         <b>Command:</b> buy 10 at $50, what's my position, run bot simulation<br>
       <b>Analysis:</b> what's the market trend?, should I buy now?, predict price movement<br>
+      <b>Demo:</b> type <b>demo</b> to start a live market simulation for presentations<br>
       <b>For commands :</b> type 'help'
   `;
     this.addMessage(welcome, 'assistant');
@@ -125,6 +132,11 @@ export class ChatAssistant implements OnInit, OnDestroy {
     }
     // Stop any running bot simulation
     this.botSimulationService.stopAll();
+    this.retailSimulationService.stopAll();
+    if (this.demoTimeout) {
+      clearTimeout(this.demoTimeout);
+      this.demoTimeout = null;
+    }
   }
   
   /**
@@ -562,6 +574,17 @@ export class ChatAssistant implements OnInit, OnDestroy {
         return;
       }
 
+      // Demo commands (must check "stop demo" before "demo")
+      if (lower.includes('stop') && lower.includes('demo')) {
+        this.stopDemo();
+        return;
+      }
+
+      if (lower === 'demo' || lower.includes('start demo') || lower.includes('run demo')) {
+        await this.startDemo();
+        return;
+      }
+
       // Bot simulation commands
       if (lower.includes('bot') && (lower.includes('sim') || lower.includes('run'))) {
         await this.handleBotSimulation(input);
@@ -982,6 +1005,9 @@ export class ChatAssistant implements OnInit, OnDestroy {
       '• run bot simulation high for 30 seconds\n' +
       '• run bot simulation extreme for 2 minutes\n' +
       '• Or use quick action buttons above\n\n' +
+      'Demo (Presentations):\n' +
+      '• demo  →  start market-maker + retail bots (2 min, fast ticks)\n' +
+      '• stop demo  →  end demo early\n\n' +
       'Information:\n' +
       '• what\'s my position?\n' +
       '• what are my stats?\n' +
@@ -1127,12 +1153,138 @@ export class ChatAssistant implements OnInit, OnDestroy {
    */
   stopSimulation(): void {
     this.botSimulationService.stopAll();
+    this.retailSimulationService.stopAll();
     this.botSimulationRunning = false;
+    this.demoRunning = false;
     if (this.botSimulationTimeout) {
       clearTimeout(this.botSimulationTimeout);
       this.botSimulationTimeout = null;
     }
+    if (this.demoTimeout) {
+      clearTimeout(this.demoTimeout);
+      this.demoTimeout = null;
+    }
     this.addMessage('Bot simulation stopped', 'assistant');
+  }
+
+  /**
+   * Start a demo simulation with both market-maker and retail bots
+   * for presentation purposes. Uses fast tick speed (200ms) and high volatility.
+   */
+  async startDemo(): Promise<void> {
+    if (!this.validateContext()) return;
+
+    if (this.demoRunning) {
+      this.addMessage('Demo is already running. Type <b>stop demo</b> to end it.', 'assistant');
+      return;
+    }
+
+    if (this.botSimulationRunning) {
+      this.addMessage('A bot simulation is already running. Stop it first or wait for it to complete.', 'assistant');
+      return;
+    }
+
+    const environmentId = this.currentEnvironment!.id;
+    const stockId = this.currentStock!.id;
+    const stockSymbol = this.currentStock!.symbol;
+    const envName = this.currentEnvironment!.name;
+    const duration = 120;
+
+    this.demoRunning = true;
+    this.botSimulationRunning = true;
+
+    this.addMessage(
+      `<b>Starting Demo Mode</b><br>` +
+      `Environment: ${envName}<br>` +
+      `Stock: ${stockSymbol}<br>` +
+      `Duration: 2 minutes<br><br>` +
+      `Launching <b>5 market-maker bots</b> (high volatility, 100ms ticks) ` +
+      `and <b>4 retail investor bots</b> (medium asymmetry)...<br>` +
+      `Type <b>stop demo</b> to end early.`,
+      'assistant'
+    );
+
+    try {
+      const mmResult = await this.botSimulationService.startSimulation(
+        environmentId,
+        stockId,
+        'high',
+        duration,
+        5,
+        100,
+      );
+
+      const retailResult = await this.retailSimulationService.start(
+        environmentId,
+        stockId,
+        duration,
+        4,
+        100,
+        'medium',
+      );
+
+      if (!mmResult.success && !retailResult.success) {
+        this.addMessage(
+          `Demo failed to start.<br>` +
+          `Market-makers: ${mmResult.message}<br>` +
+          `Retail bots: ${retailResult.message}`,
+          'assistant'
+        );
+        this.demoRunning = false;
+        this.botSimulationRunning = false;
+        return;
+      }
+
+      if (!mmResult.success) {
+        this.addMessage(`Warning: Market-maker bots failed: ${mmResult.message}`, 'assistant');
+      }
+      if (!retailResult.success) {
+        this.addMessage(`Warning: Retail bots failed: ${retailResult.message}`, 'assistant');
+      }
+
+      if (this.demoTimeout) {
+        clearTimeout(this.demoTimeout);
+      }
+      this.demoTimeout = setTimeout(() => {
+        if (this.demoRunning) {
+          this.demoRunning = false;
+          this.botSimulationRunning = false;
+          this.addMessage('<b>Demo completed.</b> All bots have stopped.', 'assistant');
+        }
+        this.demoTimeout = null;
+      }, duration * 1000);
+
+    } catch (error: any) {
+      this.addMessage(`Demo failed: ${error.message}`, 'assistant');
+      this.demoRunning = false;
+      this.botSimulationRunning = false;
+    }
+  }
+
+  /**
+   * Stop the demo simulation, halting both market-maker and retail bots.
+   */
+  stopDemo(): void {
+    if (!this.demoRunning) {
+      this.addMessage('No demo is currently running.', 'assistant');
+      return;
+    }
+
+    this.botSimulationService.stopAll();
+    this.retailSimulationService.stopAll();
+    this.demoRunning = false;
+    this.botSimulationRunning = false;
+
+    if (this.demoTimeout) {
+      clearTimeout(this.demoTimeout);
+      this.demoTimeout = null;
+    }
+    if (this.botSimulationTimeout) {
+      clearTimeout(this.botSimulationTimeout);
+      this.botSimulationTimeout = null;
+    }
+
+    this.addMessage('<b>Demo stopped.</b> All market-maker and retail bots have been halted.', 'assistant');
   }
 
   /**

@@ -288,8 +288,11 @@ export class BotSimulationService {
       return;
     }
 
-    // 1. Evolve the mid-price (random walk + shocks)
-    this.evolveMidPrice(state);
+    // 1. Evolve the mid-price (anchored to last trade price)
+    await this.evolveMidPrice(state, environmentId, stockId);
+
+    // Early-exit if stopped mid-tick
+    if (!this.stockSimulations.has(stockId)) return;
 
     // 2. When a target price is active, cancel ALL bot quotes up-front
     //    and fetch the REAL last trade price from the DB so we can
@@ -311,38 +314,59 @@ export class BotSimulationService {
       } catch { /* proceed with null — will fall back to state.mid */ }
     }
 
-    // 3. Each bot places a fresh quote
-    for (const bot of state.bots) {
-      await this.requoteBot(environmentId, stockId, bot, state, lastTradePrice);
-    }
+    // Early-exit if stopped mid-tick
+    if (!this.stockSimulations.has(stockId)) return;
 
-    this.scheduleNextTick(environmentId, stockId);
+    // 3. All bots place fresh quotes in parallel
+    await Promise.all(
+      state.bots.map(bot => this.requoteBot(environmentId, stockId, bot, state, lastTradePrice))
+    );
+
+    // Only schedule next if still running
+    if (this.stockSimulations.has(stockId)) {
+      this.scheduleNextTick(environmentId, stockId);
+    }
   }
 
   // ────────────────────── mid-price dynamics ──────────────────────
 
   /**
-   * Gaussian random walk with occasional news shocks.
-   * Uses Box-Muller for approximately normal increments.
+   * Evolve mid-price by anchoring to the last actual trade price.
+   * This ensures MM quotes follow market direction driven by retail
+   * sentiment instead of oscillating around an independent random walk.
    */
-  private evolveMidPrice(state: MarketMakerSimState): void {
+  private async evolveMidPrice(
+    state: MarketMakerSimState,
+    environmentId: string,
+    stockId: string,
+  ): Promise<void> {
     const p = state.profile;
-    const z = this.gaussianRandom();
 
     if (state.targetMid !== null) {
-      // Snap mid directly to target, plus tiny noise for organic feel.
-      // This ensures bots quote tightly around the target — fills
-      // can't drag mid away because requoteBot also guards against
-      // price-discovery overrides when a target is active.
+      // Target mode: snap to target with tiny noise
+      const z = this.gaussianRandom();
       state.mid = state.targetMid + z * p.tickSigma * 0.15;
-    } else {
-      // Normal random walk
-      state.mid += z * p.tickSigma;
+      return;
+    }
 
-      // Occasional shock
-      if (Math.random() < p.shockProb) {
-        state.mid += this.gaussianRandom() * p.shockSigma;
+    // Anchor mid to last trade price so MM follows the market
+    try {
+      const trades = await this.supabaseService.getEnvironmentTrades(environmentId, stockId, 1);
+      if (trades.length > 0) {
+        const lastTradePrice = Number(trades[0].price);
+        // Blend: 80% follow market, 20% random walk from current mid
+        state.mid = lastTradePrice * 0.8
+          + (state.mid + this.gaussianRandom() * p.tickSigma) * 0.2;
+      } else {
+        state.mid += this.gaussianRandom() * p.tickSigma;
       }
+    } catch {
+      state.mid += this.gaussianRandom() * p.tickSigma;
+    }
+
+    // Occasional shock
+    if (Math.random() < p.shockProb) {
+      state.mid += this.gaussianRandom() * p.shockSigma;
     }
 
     state.mid = Math.max(0.01, state.mid);
@@ -372,11 +396,9 @@ export class BotSimulationService {
     state: MarketMakerSimState,
     lastTradePrice: number | null = null,
   ): Promise<void> {
-    // Cancel previous quotes (fire-and-forget, may already be filled)
-    // When target is active, bulk cancel already happened in runTick
-    if (state.targetMid === null) {
-      await this.cancelQuote(bot);
-    }
+    // When target is active, bulk cancel already happened in runTick.
+    // In normal mode, skip cancel to reduce DB overhead — old orders
+    // sit alongside new ones and get filled or expire naturally.
 
     const p = state.profile;
 
@@ -503,7 +525,6 @@ export class BotSimulationService {
         bot.quote.bidOrderId = bidResult.order.id;
         if (bidResult.tradesExecuted && bidResult.tradesExecuted > 0) {
           bot.inventory += units;
-          state.mid = bidPrice;
         }
       }
     } catch { /* validation failure — skip */ }
@@ -517,7 +538,6 @@ export class BotSimulationService {
         bot.quote.askOrderId = askResult.order.id;
         if (askResult.tradesExecuted && askResult.tradesExecuted > 0) {
           bot.inventory -= units;
-          state.mid = askPrice;
         }
       }
     } catch { /* validation failure — skip */ }
