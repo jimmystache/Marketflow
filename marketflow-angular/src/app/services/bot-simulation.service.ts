@@ -32,7 +32,7 @@ interface BotState {
 }
 
 /** Volatility profile that controls price dynamics and spread */
-interface VolatilityProfile {
+export interface VolatilityProfile {
   /** Per-tick std-dev of mid-price random walk */
   tickSigma: number;
   /** Base half-spread (each bot multiplies by its own factor) */
@@ -106,17 +106,20 @@ export class BotSimulationService {
   async startSimulation(
     environmentId: string,
     stockId: string,
-    volatility: 'normal' | 'high' | 'extreme',
+    volatility: 'normal' | 'high' | 'extreme' | 'custom',
     durationSeconds: number,
     numberOfBots: number = 5,
     tickSpeedMs: number = 800,
     initialPrice?: number,
+    customProfile?: VolatilityProfile,
   ): Promise<{ success: boolean; message: string }> {
     if (this.stockSimulations.has(stockId)) {
       return { success: false, message: 'Simulation already running for this stock' };
     }
 
-    const profile = VOLATILITY_PROFILES[volatility] ?? VOLATILITY_PROFILES['normal'];
+    const profile = volatility === 'custom' && customProfile
+      ? customProfile
+      : (VOLATILITY_PROFILES[volatility] ?? VOLATILITY_PROFILES['normal']);
 
     try {
       const { bots, mid } = await this.initializeBots(environmentId, stockId, numberOfBots, initialPrice);

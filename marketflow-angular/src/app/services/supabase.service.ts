@@ -1156,6 +1156,27 @@ export class SupabaseService {
   }
 
   /**
+   * Get all participants in an environment, ordered by cash descending
+   */
+  async getEnvironmentParticipants(environmentId: string): Promise<DbEnvironmentParticipant[]> {
+    const { data, error } = await this.supabase
+      .from('environment_participants')
+      .select(`
+        *,
+        trader:traders!trader_id(id, username)
+      `)
+      .eq('market_id', environmentId)
+      .order('cash', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching environment participants:', error);
+      return [];
+    }
+
+    return data ?? [];
+  }
+
+  /**
    * Get or create participant (for bot simulations)
    */
   async getOrCreateParticipant(environmentId: string, traderId: string, startingCash: number): Promise<DbEnvironmentParticipant | null> {

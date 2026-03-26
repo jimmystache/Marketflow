@@ -32,7 +32,7 @@ Chart.register(...registerables);
 
 import { HelpModeService } from '../../services/help-mode.service';
 import { RetailSimulationService } from '../../services/retail-simulation.service';
-import { BotSimulationService } from '../../services/bot-simulation.service';
+import { BotSimulationService, VolatilityProfile } from '../../services/bot-simulation.service';
 
 interface OrderBookEntry {
   price: number;
@@ -50,6 +50,14 @@ interface LocalOrder {
   status: 'open' | 'filled' | 'partial' | 'cancelled';
   created_at: string;
   trader_id: string;
+}
+
+interface LeaderboardEntry {
+  rank: number;
+  username: string;
+  cash: number;
+  cashChange: number;
+  isCurrentUser: boolean;
 }
 
 // Stock input for environment creation form
@@ -226,7 +234,7 @@ export class Trading implements OnInit, OnDestroy {
 
   // Bot simulation controls
   mmBotTargetStockId: string = '';
-  mmBotVolatility: 'normal' | 'high' | 'extreme' = 'normal';
+  mmBotVolatility: 'normal' | 'high' | 'extreme' | 'custom' = 'normal';
   activeMmSimStocks: Set<string> = new Set();
   retailBotTargetStockId: string = '';
   retailAsymmetry: 'low' | 'medium' | 'high' = 'medium';
@@ -239,6 +247,21 @@ export class Trading implements OnInit, OnDestroy {
   botTargetEnabled: boolean = false;
   /** Polling intervals that track when bot simulations end naturally */
   private botPollIntervals: ReturnType<typeof setInterval>[] = [];
+
+  // Leaderboard
+  leaderboardEntries: LeaderboardEntry[] = [];
+  isLoadingLeaderboard: boolean = false;
+
+  // Market maker custom volatility profile
+  showMmCustomParams: boolean = false;
+  mmCustomProfile: VolatilityProfile = {
+    tickSigma: 0.02,
+    baseHalfSpread: 0.08,
+    shockProb: 0.003,
+    shockSigma: 0.40,
+    inventorySkewPerUnit: 0.005,
+    jitter: 0.03,
+  };
 
   // Order book
   bids: OrderBookEntry[] = [];
@@ -825,6 +848,41 @@ export class Trading implements OnInit, OnDestroy {
 
     // Update position for selected stock
     this.updateCurrentPosition();
+
+    // Populate leaderboard
+    this.loadLeaderboard();
+  }
+
+  /**
+   * Load leaderboard: all human participants ranked by cash
+   */
+  async loadLeaderboard(): Promise<void> {
+    if (!this.environmentId || !this.currentEnvironment) return;
+    this.isLoadingLeaderboard = true;
+    try {
+      const participants = await this.supabaseService.getEnvironmentParticipants(this.environmentId);
+      const startingCash = this.currentEnvironment.starting_cash ?? 10000;
+      this.leaderboardEntries = participants
+        .filter(p => !(p.trader?.username ?? '').startsWith('BOT_'))
+        .map((p, i) => ({
+          rank: i + 1,
+          username: p.trader?.username ?? 'Unknown',
+          cash: Number(p.cash),
+          cashChange: Number(p.cash) - startingCash,
+          isCurrentUser: p.trader_id === this.traderId,
+        }));
+    } catch (e) {
+      console.error('Failed to load leaderboard:', e);
+    } finally {
+      this.isLoadingLeaderboard = false;
+    }
+  }
+
+  /**
+   * Called when the MM volatility dropdown changes; show/hide custom params panel.
+   */
+  onMmVolatilityChange(): void {
+    this.showMmCustomParams = this.mmBotVolatility === 'custom';
   }
 
   /**
@@ -1786,6 +1844,9 @@ export class Trading implements OnInit, OnDestroy {
         this.positionAvgPrice,
       );
     }
+
+    // Refresh leaderboard after each trade
+    this.loadLeaderboard();
   }
 
   /**
@@ -1968,6 +2029,7 @@ export class Trading implements OnInit, OnDestroy {
       5,   // 5 market-maker bots
       this.botTickSpeedMs,
       (this.botTargetEnabled && this.botTargetPrice > 0) ? this.botTargetPrice : undefined,
+      this.mmBotVolatility === 'custom' ? this.mmCustomProfile : undefined,
     );
 
     if (!result.success) {

@@ -718,12 +718,74 @@
             <select [(ngModel)]="mmBotTargetStockId" class="bot-stock-select">
               <option *ngFor="let s of environmentStocks" [value]="s.id">{{ s.symbol }}</option>
             </select>
-            <select [(ngModel)]="mmBotVolatility" class="bot-vol-select">
+            <select [(ngModel)]="mmBotVolatility"
+                    (ngModelChange)="onMmVolatilityChange()"
+                    class="bot-vol-select">
               <option value="normal">Normal</option>
               <option value="high">High</option>
               <option value="extreme">Extreme</option>
+              <option value="custom">Custom</option>
             </select>
           </div>
+
+          <!-- Custom volatility parameters -->
+          <div *ngIf="showMmCustomParams" class="mm-custom-panel">
+            <div class="mm-param-row">
+              <label class="mm-param-label">Tick σ</label>
+              <input type="range" class="mm-param-slider"
+                     [(ngModel)]="mmCustomProfile.tickSigma"
+                     min="0.001" max="0.5" step="0.001">
+              <input type="number" class="mm-param-input"
+                     [(ngModel)]="mmCustomProfile.tickSigma"
+                     min="0.001" max="0.5" step="0.001">
+            </div>
+            <div class="mm-param-row">
+              <label class="mm-param-label">½ Spread</label>
+              <input type="range" class="mm-param-slider"
+                     [(ngModel)]="mmCustomProfile.baseHalfSpread"
+                     min="0.01" max="1.0" step="0.01">
+              <input type="number" class="mm-param-input"
+                     [(ngModel)]="mmCustomProfile.baseHalfSpread"
+                     min="0.01" max="1.0" step="0.01">
+            </div>
+            <div class="mm-param-row">
+              <label class="mm-param-label">Shock P</label>
+              <input type="range" class="mm-param-slider"
+                     [(ngModel)]="mmCustomProfile.shockProb"
+                     min="0" max="0.1" step="0.001">
+              <input type="number" class="mm-param-input"
+                     [(ngModel)]="mmCustomProfile.shockProb"
+                     min="0" max="0.1" step="0.001">
+            </div>
+            <div class="mm-param-row">
+              <label class="mm-param-label">Shock σ</label>
+              <input type="range" class="mm-param-slider"
+                     [(ngModel)]="mmCustomProfile.shockSigma"
+                     min="0.1" max="5.0" step="0.1">
+              <input type="number" class="mm-param-input"
+                     [(ngModel)]="mmCustomProfile.shockSigma"
+                     min="0.1" max="5.0" step="0.1">
+            </div>
+            <div class="mm-param-row">
+              <label class="mm-param-label">Inv Skew</label>
+              <input type="range" class="mm-param-slider"
+                     [(ngModel)]="mmCustomProfile.inventorySkewPerUnit"
+                     min="0.001" max="0.05" step="0.001">
+              <input type="number" class="mm-param-input"
+                     [(ngModel)]="mmCustomProfile.inventorySkewPerUnit"
+                     min="0.001" max="0.05" step="0.001">
+            </div>
+            <div class="mm-param-row">
+              <label class="mm-param-label">Jitter</label>
+              <input type="range" class="mm-param-slider"
+                     [(ngModel)]="mmCustomProfile.jitter"
+                     min="0.01" max="0.3" step="0.01">
+              <input type="number" class="mm-param-input"
+                     [(ngModel)]="mmCustomProfile.jitter"
+                     min="0.01" max="0.3" step="0.01">
+            </div>
+          </div>
+
           <button class="bot-toggle-btn" [class.active]="activeMmSimStocks.has(mmBotTargetStockId)"
                   (click)="toggleMmSimulation()">
             {{ activeMmSimStocks.has(mmBotTargetStockId) ? 'STOP MARKET MAKER' : 'START MARKET MAKER' }}
@@ -1147,6 +1209,31 @@
         (mouseleave)="closeTooltip()">
           <span class="stat-label">Role</span>
           <span class="stat-value admin-badge">Admin</span>
+        </div>
+
+        <div class="stat-divider"></div>
+
+        <h3 class="stats-title">Leaderboard</h3>
+
+        <div *ngIf="isLoadingLeaderboard" class="leaderboard-loading">Loading...</div>
+
+        <div *ngIf="!isLoadingLeaderboard && leaderboardEntries.length === 0" class="leaderboard-empty">
+          No participants yet
+        </div>
+
+        <div *ngFor="let entry of leaderboardEntries"
+             class="leaderboard-row"
+             [class.leaderboard-row--me]="entry.isCurrentUser">
+          <span class="leaderboard-rank">{{ entry.rank }}</span>
+          <span class="leaderboard-username">{{ entry.username }}</span>
+          <div class="leaderboard-values">
+            <span class="leaderboard-cash">{{ formatCurrency(entry.cash) }}</span>
+            <span class="leaderboard-change"
+                  [class.positive]="entry.cashChange > 0"
+                  [class.negative]="entry.cashChange < 0">
+              {{ entry.cashChange >= 0 ? '+' : '' }}{{ formatCurrency(entry.cashChange) }}
+            </span>
+          </div>
         </div>
       </div>
     </aside>
