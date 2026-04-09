@@ -270,6 +270,12 @@ export class Trading implements OnInit, OnDestroy {
   // Trade history
   trades: DbTrade[] = [];
 
+  // Which stocks are visible on the graph
+  visibleSymbols = new Set<string>();
+
+  // Graphing multiple stocks
+  stockTradeMap: Record<string, DbTrade[]> = {};
+
   // Price line chart (built from trades)
   priceChartData: ChartConfiguration<'line'>['data'] = {
     datasets: [
@@ -1325,6 +1331,10 @@ export class Trading implements OnInit, OnDestroy {
       created_at: t.created_at,
     }));
 
+    if (this.selectedStockId) {
+      this.stockTradeMap[this.selectedStockId] = [...this.trades];
+    }
+
     if (this.trades.length > 0) {
       this.lastPrice = Number(this.trades[0].price);
     }
@@ -2236,53 +2246,108 @@ export class Trading implements OnInit, OnDestroy {
     const canvas = document.getElementById('priceChart') as HTMLCanvasElement;
     if (!canvas) return;
 
-    // Sort trades by time (oldest → newest)
-    let sortedTrades = [...this.trades].sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
-
-    // Apply time range filter
     const startTime = this.getTimeRangeStart();
     const endTime = this.getTimeRangeEnd();
-    
-    if (startTime) {
-      sortedTrades = sortedTrades.filter(t => new Date(t.created_at) >= startTime);
-    }
-    if (endTime) {
-      sortedTrades = sortedTrades.filter(t => new Date(t.created_at) <= endTime);
+
+    const allTimestampsSet = new Set<number>();
+
+    for (const stock of this.environmentStocks) {
+      let trades = this.stockTradeMap[stock.id] || [];
+
+      for (const t of trades) {
+        const ts = new Date(t.created_at).getTime();
+
+        if (
+          (!startTime || ts >= startTime.getTime()) &&
+          (!endTime || ts <= endTime.getTime())
+        ) {
+          allTimestampsSet.add(ts);
+        }
+      }
     }
 
-    const labels = sortedTrades.map(t => {
-      const date = new Date(t.created_at);
-      // Show date + time for longer ranges
-      if (this.chartTimeRange === '1d' || this.chartTimeRange === 'custom' || this.chartTimeRange === 'all') {
-        return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const allTimestamps = Array.from(allTimestampsSet).sort((a, b) => a - b);
+
+    const labels = allTimestamps.map(ts => {
+      const date = new Date(ts);
+
+      if (
+        this.chartTimeRange === '1d' ||
+        this.chartTimeRange === 'custom' ||
+        this.chartTimeRange === 'all'
+      ) {
+        return date.toLocaleString([], {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
       }
+
       return date.toLocaleTimeString();
     });
 
-    const prices = sortedTrades.map((t) => Number(t.price));
+    const datasets = this.environmentStocks.map((stock, index) => {
+      let trades = this.stockTradeMap[stock.id] || [];
+
+      if (startTime) {
+        trades = trades.filter(t => new Date(t.created_at) >= startTime);
+      }
+      if (endTime) {
+        trades = trades.filter(t => new Date(t.created_at) <= endTime);
+      }
+
+      trades = trades.sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+
+      const priceMap = new Map<number, number>();
+      for (const t of trades) {
+        const ts = new Date(t.created_at).getTime();
+        priceMap.set(ts, Number(t.price));
+      }
+
+      let lastPrice: number | null = null;
+
+      const filledData = allTimestamps.map(ts => {
+        if (priceMap.has(ts)) {
+          lastPrice = priceMap.get(ts)!;
+          return lastPrice;
+        }
+
+        return lastPrice;
+      });
+
+      return {
+        label: stock.symbol,
+        data: filledData,
+        borderColor: this.getColor(index),
+        backgroundColor: this.getColor(index, 0.1),
+        tension: 0.25,
+        pointRadius: 0,
+        spanGaps: true,
+        hidden: this.visibleSymbols.size
+          ? !this.visibleSymbols.has(stock.id)
+          : false,
+      };
+    });
 
     if (!this.priceChart) {
       this.priceChart = new Chart(canvas, {
         type: 'line',
         data: {
           labels,
-          datasets: [
-            {
-              label: this.symbol,
-              data: prices,
-              borderColor: 'red',
-              backgroundColor: 'rgba(37, 99, 235, 0.1)',
-              tension: 0.25,
-              pointRadius: 0, // perf boost
-            },
-          ],
+          datasets,
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           animation: false,
+          plugins: {
+            legend: {
+              display: true,
+            },
+          },
         },
       });
 
@@ -2290,52 +2355,21 @@ export class Trading implements OnInit, OnDestroy {
     }
 
     this.priceChart.data.labels = labels;
-    this.priceChart.data.datasets[0].data = prices;
+    this.priceChart.data.datasets = datasets;
     this.priceChart.update('none');
   }
 
-  shortId(id: string): string {
-    const v = String(id || '');
-    if (!v) return '';
-    if (v.length <= 12) return v;
-    return `${v.slice(0, 6)}…${v.slice(-4)}`;
-  }
+  getColor(index: number, alpha = 1): string {
+    const colors = [
+      '37, 99, 235',   // blue
+      '220, 38, 38',   // red
+      '16, 185, 129',  // green
+      '234, 179, 8',   // yellow
+      '168, 85, 247',  // purple
+    ];
 
-  async copyEnvironmentId(): Promise<void> {
-    if (!this.environmentId) return;
-    await this.copyToClipboard(this.environmentId);
-  }
-
-  async copyStockId(): Promise<void> {
-    if (!this.selectedStockId) return;
-    await this.copyToClipboard(this.selectedStockId);
-  }
-
-  private async copyToClipboard(text: string): Promise<void> {
-    const value = String(text || '').trim();
-    if (!value) return;
-
-    try {
-      await navigator.clipboard.writeText(value);
-      return;
-    } catch {
-      // Fall back to legacy copy if Clipboard API is blocked.
-    }
-
-    try {
-      const textarea = document.createElement('textarea');
-      textarea.value = value;
-      textarea.style.position = 'fixed';
-      textarea.style.left = '-9999px';
-      textarea.style.top = '-9999px';
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-    } catch (error) {
-      console.warn('Copy to clipboard failed:', error);
-    }
+    const c = colors[index % colors.length];
+    return `rgba(${c}, ${alpha})`;
   }
 
   toggleHelpMode(): void {
