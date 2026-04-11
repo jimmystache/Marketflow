@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
+import { environment } from '../../environments/environment';
 
 /**
  * Token storage key in localStorage
@@ -69,7 +70,7 @@ export interface LoginResponse {
   providedIn: 'root'
 })
 export class AuthService {
-  private readonly loginUrl = 'https://fm-data.herokuapp.com/api/tokens';
+  private readonly loginUrl = environment.loginApiUrl || 'https://fm-data.herokuapp.com/api/tokens';
 
   private readonly httpOptions = {
     headers: new HttpHeaders({
