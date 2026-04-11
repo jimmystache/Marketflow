@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>MarketFlow</title>
+    <base href="/Marketflow/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: #f5f5f5;
+      }
+      .container {
+        max-width: 600px;
+        margin: 50px auto;
+        background: white;
+        padding: 40px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      }
+      h1 { color: #333; margin-bottom: 10px; }
+      p { color: #666; line-height: 1.6; }
+      a { color: #007bff; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>404 - Page Not Found</h1>
+      <p>The page you're looking for doesn't exist, but MarketFlow is loading...</p>
+      <p><a href="/Marketflow/">Go back to MarketFlow</a></p>
+      <script>
+        // Redirect to the main app - Angular will handle routing
+        sessionStorage.redirect = location.href;
+        location.href = '/Marketflow/';
+      </script>
+    </div>
+  </body>
+</html>
