@@ -1,0 +1,117 @@
+<div class="bot-setup-container">
+  <div class="form-wrapper">
+
+    <button class="back-button"
+    (click)="goTo('')">
+      ← Back
+    </button>
+
+    <div class = "bot-wrapper">
+      <div class="grid-two-columns">
+
+         <div class="bot-card">
+         <h2 class="bot-title">Edit Bot</h2>
+         <p class="bot-subtitle">Modify existing bot settings</p>
+
+         <form class="bot-form">
+
+            <div class="form-group">
+               <label class="form-label" for="botFile">Upload Bot File</label>
+
+               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 0.5rem;">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+               </svg>
+            </div>
+
+            <div class="form-group">
+               <label class="form-label" for="editBotName">Bot Name</label>
+               <input
+               id="editBotName"
+               type="text"
+               class="form-input"
+               placeholder="Enter bot name"
+               />
+            </div>
+
+            <div class="form-group">
+               <label class="form-label" for="editBotDescription">Description</label>
+               <input
+               id="editBotDescription"
+               type="text"
+               class="form-input"
+               placeholder="Enter description"
+               />
+            </div>
+
+            <div class="form-group">
+               <label class="form-label" for="editBotSettings">Settings</label>
+               <input
+               id="editBotSettings"
+               type="text"
+               class="form-input"
+               placeholder="Enter settings"
+               />
+            </div>
+
+            <button type="button" class="submit-button">Edit Bot</button>
+
+         </form>
+         </div>
+
+         <div class="bot-card">
+         <h2 class="bot-title">Create Bot</h2>
+         <p class="bot-subtitle">Create a new bot configuration</p>
+
+         <form class="bot-form">
+
+            <div class="form-group">
+               <label class="form-label" for="createBotName">Bot Name</label>
+               <input
+               id="createBotName"
+               type="text"
+               class="form-input"
+               placeholder="Enter bot name"
+               />
+            </div>
+
+            <div class="form-group">
+               <label class="form-label" for="createBotType">Bot Type</label>
+               <input
+               id="createBotType"
+               type="text"
+               class="form-input"
+               placeholder="Enter bot type"
+               />
+            </div>
+
+            <div class="form-group">
+               <label class="form-label" for="createBotDesc">Description</label>
+               <input
+               id="createBotDesc"
+               type="text"
+               class="form-input"
+               placeholder="Enter description"
+               />
+            </div>
+
+            <div class="form-group">
+               <label class="form-label" for="createBotConfig">Configuration</label>
+               <input
+               id="createBotConfig"
+               type="text"
+               class="form-input"
+               placeholder="Enter configuration"
+               />
+            </div>
+
+            <button type="button" class="submit-button">Create Bot</button>
+
+         </form>
+         </div>
+
+      </div>
+    </div>
+  </div>
+</div>

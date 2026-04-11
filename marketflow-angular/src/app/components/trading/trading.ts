@@ -1,0 +1,2409 @@
+import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import {
+  SupabaseService,
+  DbOrder,
+  DbTrade,
+  DbTrader,
+  DbMarket,
+  DbPosition,
+  DbTradingEnvironment,
+  DbEnvironmentSearchResult,
+  DbEnvironmentStock,
+  DbEnvironmentParticipant,
+  DbEnvironmentPosition,
+  DbEnvironmentOrder,
+  DbEnvironmentTrade,
+  DbEnvironmentMessage,
+  CreateEnvironmentInput,
+  CreateStockInput,
+} from '../../services/supabase.service';
+import { TradingContextService } from '../../services/trading-context.service';
+import { Chart, registerables } from 'chart.js';
+import { BaseChartDirective } from 'ng2-charts';
+import {
+  Chart as ChartJS,
+  ChartConfiguration,
+} from 'chart.js';
+import 'chartjs-adapter-date-fns';
+Chart.register(...registerables);
+
+import { HelpModeService } from '../../services/help-mode.service';
+import { RetailSimulationService } from '../../services/retail-simulation.service';
+import { BotSimulationService, VolatilityProfile } from '../../services/bot-simulation.service';
+
+interface OrderBookEntry {
+  price: number;
+  units: number;
+  isMine: boolean;
+  orderCount: number;
+}
+
+interface LocalOrder {
+  id: string;
+  type: 'buy' | 'sell';
+  price: number;
+  units: number;
+  filled_units: number;
+  status: 'open' | 'filled' | 'partial' | 'cancelled';
+  created_at: string;
+  trader_id: string;
+}
+
+interface LeaderboardEntry {
+  rank: number;
+  username: string;
+  cash: number;
+  cashChange: number;
+  isCurrentUser: boolean;
+}
+
+// Stock input for environment creation form
+interface StockFormInput {
+  symbol: string;
+  name: string;
+  description: string;
+  startingPrice: number;
+  minPriceChange: number;
+  allowShorting: boolean | null;
+  maxShortUnits: number | null;
+}
+
+// UI View state
+type ViewState =
+  | 'login'
+  | 'environment-select'
+  | 'create-environment'
+  | 'join-environment'
+  | 'trading';
+
+@Component({
+  selector: 'app-trading',
+  standalone: true,
+  imports: [CommonModule, FormsModule, BaseChartDirective],
+  templateUrl: './trading.html',
+  styleUrls: ['./trading.css'],
+})
+export class Trading implements OnInit, OnDestroy {
+  // View state
+  currentView: ViewState = 'login';
+
+  // Connection state
+  isConnected: boolean = false;
+  isLoading: boolean = true;
+  connectionError: string | null = null;
+
+  // Market state (legacy - kept for compatibility)
+  symbol: string = 'MKT';
+  marketId: string = '';
+  market: DbMarket | null = null;
+  isRunning: boolean = true;
+  isPaused: boolean = false;
+
+  // ==================== ENVIRONMENT STATE ====================
+
+  // Current environment
+  currentEnvironment: DbTradingEnvironment | null = null;
+  environmentId: string = '';
+
+  // Environment stocks
+  environmentStocks: DbEnvironmentStock[] = [];
+  selectedStock: DbEnvironmentStock | null = null;
+  selectedStockId: string = '';
+
+  // Participant state
+  participant: DbEnvironmentParticipant | null = null;
+  participantId: string = '';
+  isAdmin: boolean = false;
+
+  // Positions in current environment
+  environmentPositions: DbEnvironmentPosition[] = [];
+
+  // Environment orders and trades
+  environmentOrders: DbEnvironmentOrder[] = [];
+  environmentTrades: DbEnvironmentTrade[] = [];
+  myEnvironmentOrders: DbEnvironmentOrder[] = [];
+
+  // Admin messages
+  adminMessages: DbEnvironmentMessage[] = [];
+  latestMessage: DbEnvironmentMessage | null = null;
+  showMessageBanner: boolean = false;
+  showMessageComposer: boolean = false;
+  showMessageHistory: boolean = false;
+  newAdminMessage: string = '';
+  adminMessageType: 'info' | 'warning' | 'alert' = 'info';
+  isSendingMessage: boolean = false;
+  dismissedMessageIds: Set<string> = new Set();
+
+  /** localStorage key for persisting dismissed message IDs per environment */
+  private get dismissedStorageKey(): string {
+    return `marketflow_dismissed_msgs_${this.environmentId}`;
+  }
+
+  /** Load dismissed message IDs from localStorage for the current environment */
+  private loadDismissedMessageIds(): void {
+    try {
+      const raw = localStorage.getItem(this.dismissedStorageKey);
+      this.dismissedMessageIds = raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+      this.dismissedMessageIds = new Set();
+    }
+  }
+
+  /** Persist the current dismissed set to localStorage */
+  private saveDismissedMessageIds(): void {
+    try {
+      localStorage.setItem(
+        this.dismissedStorageKey,
+        JSON.stringify([...this.dismissedMessageIds]),
+      );
+    } catch {
+      // storage full or unavailable — ignore
+    }
+  }
+
+  // Environment lists for selection
+  publicEnvironments: DbTradingEnvironment[] = [];
+  myEnvironments: DbTradingEnvironment[] = [];
+
+  // Join environment form
+  joinEnvironmentId: string = '';
+  joinPassword: string = '';
+  selectedEnvironmentToJoin: DbEnvironmentSearchResult | null = null;
+
+  // Environment search
+  environmentSearchTerm: string = '';
+  searchResults: DbEnvironmentSearchResult[] = [];
+  isSearching: boolean = false;
+
+  // Create environment form
+  newEnvironment: CreateEnvironmentInput = {
+    name: '',
+    description: '',
+    is_private: false,
+    password: '',
+    starting_cash: 10000,
+    starting_shares: 100,
+    min_price_change: 0.01,
+    allow_shorting: false,
+    max_short_units: 0,
+  };
+
+  // Stock creation form
+  newStocks: StockFormInput[] = [
+    {
+      symbol: '',
+      name: '',
+      description: '',
+      startingPrice: 100,
+      minPriceChange: 0.01,
+      allowShorting: null,
+      maxShortUnits: null,
+    },
+  ];
+
+  // Import settings
+  importFromEnvironmentId: string = '';
+  availableImportEnvironments: DbTradingEnvironment[] = [];
+
+  // User state
+  traderId: string = '';
+  traderUsername: string = '';
+  trader: DbTrader | null = null;
+  cash: number = 10000.0;
+  settledCash: number = 10000.0;
+  availableCash: number = 10000.0;
+
+  // Position (for current selected stock)
+  position: DbPosition | null = null;
+  positionUnits: number = 0;
+  positionAvgPrice: number = 0;
+
+  // Order form
+  orderType: 'buy' | 'sell' = 'buy';
+  orderUnits: number = 1;
+  orderPrice: number = 0;
+  maxUnits: number = 100;
+  maxPrice: number = 1000;
+  isPlacingOrder: boolean = false;
+
+  isResettingOrderBook: boolean = false;
+  isSettlingOrderBook: boolean = false;
+
+  // Bot simulation controls
+  mmBotTargetStockId: string = '';
+  mmBotVolatility: 'normal' | 'high' | 'extreme' | 'custom' = 'normal';
+  activeMmSimStocks: Set<string> = new Set();
+  retailBotTargetStockId: string = '';
+  retailAsymmetry: 'low' | 'medium' | 'high' = 'medium';
+  activeRetailSimStocks: Set<string> = new Set();
+  /** Shared tick speed for all bots (200–1400 ms) */
+  botTickSpeedMs: number = 800;
+  /** Target mid-price for running MM bots (0 = not set) */
+  botTargetPrice: number = 0;
+  /** Whether the target price override is active */
+  botTargetEnabled: boolean = false;
+  /** Polling intervals that track when bot simulations end naturally */
+  private botPollIntervals: ReturnType<typeof setInterval>[] = [];
+
+  // Leaderboard
+  leaderboardEntries: LeaderboardEntry[] = [];
+  isLoadingLeaderboard: boolean = false;
+
+  // Market maker custom volatility profile
+  showMmCustomParams: boolean = false;
+  mmCustomProfile: VolatilityProfile = {
+    tickSigma: 0.02,
+    baseHalfSpread: 0.08,
+    shockProb: 0.003,
+    shockSigma: 0.40,
+    inventorySkewPerUnit: 0.005,
+    jitter: 0.03,
+  };
+
+  // Order book
+  bids: OrderBookEntry[] = [];
+  asks: OrderBookEntry[] = [];
+
+  // Trade history
+  trades: DbTrade[] = [];
+
+  // Which stocks are visible on the graph
+  visibleSymbols = new Set<string>();
+
+  // Graphing multiple stocks
+  stockTradeMap: Record<string, DbTrade[]> = {};
+
+  // Price line chart (built from trades)
+  priceChartData: ChartConfiguration<'line'>['data'] = {
+    datasets: [
+      {
+        label: 'Price',
+        data: [],
+        borderColor: '#16a34a',
+        backgroundColor: 'rgba(22,163,74,0.15)',
+        pointRadius: 0,
+        borderWidth: 2,
+        tension: 0.4,
+        cubicInterpolationMode: 'monotone',
+      },
+    ],
+  };
+
+  priceChartOptions: ChartConfiguration<'line'>['options'] = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    parsing: false,
+    normalized: true,
+    spanGaps: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        intersect: false,
+        mode: 'index',
+        callbacks: {
+          title: (items) => {
+            const first = items?.[0];
+            const idx = Number((first as any)?.parsed?.x);
+            const ts = this.tradePointTimes[idx];
+            if (!Number.isFinite(idx)) return 'Trade';
+            if (Number.isFinite(ts)) return `Trade #${idx + 1} • ${new Date(ts).toLocaleString()}`;
+            return `Trade #${idx + 1}`;
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        // Use sequential x-axis so multi-day gaps don't compress labels.
+        type: 'linear',
+        ticks: {
+          autoSkip: true,
+          maxTicksLimit: 6,
+          autoSkipPadding: 16,
+          maxRotation: 0,
+          minRotation: 0,
+          padding: 6,
+          callback: (value) => {
+            const n = typeof value === 'string' ? Number(value) : (value as number);
+            if (!Number.isFinite(n)) return '';
+            return `#${Math.round(n) + 1}`;
+          },
+        },
+      },
+      y: {
+        ticks: { maxTicksLimit: 6 },
+      },
+    },
+  };
+
+  private tradePointTimes: number[] = [];
+
+  @ViewChild(BaseChartDirective)
+  private priceChartDirective?: BaseChartDirective;
+
+  private priceSeriesRebuildTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastPriceSeriesRebuildAt = 0;
+  private readonly priceSeriesRebuildMinIntervalMs = 60;
+
+  // My orders
+  myOrders: LocalOrder[] = [];
+
+  // All orders (from database)
+  allOrders: DbOrder[] = [];
+
+  // Spread info
+  bestBid: number | null = null;
+  bestAsk: number | null = null;
+  spread: number | null = null;
+  lastPrice: number | null = null;
+  /** True when the RAW book has crossing orders that need settlement */
+  hasCross = false;
+  isMatchingSweepRunning = false;
+
+  // UI state
+  activeTab: 'orderbook' | 'history' | 'myorders' | 'graph' = 'orderbook';
+
+  // Chart
+  priceChart: Chart | null = null;
+
+  // All-stocks chart
+  
+  // Chart time range filter
+  chartTimeRange: string = 'all';
+  chartTimeRangeOptions = [
+    { value: 'all', label: 'All Time' },
+    { value: '5m', label: 'Last 5 Minutes' },
+    { value: '15m', label: 'Last 15 Minutes' },
+    { value: '30m', label: 'Last 30 Minutes' },
+    { value: '1h', label: 'Last 1 Hour' },
+    { value: '4h', label: 'Last 4 Hours' },
+    { value: '1d', label: 'Last 24 Hours' },
+    { value: 'custom', label: 'Custom Range' }
+  ];
+  
+  // Custom date range
+  customStartDate: string = '';
+  customEndDate: string = '';
+  showCustomDatePicker: boolean = false;
+
+  copiedHint: string = '';
+  private copiedHintTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Username input for login
+  usernameInput: string = '';
+  isLoggingIn: boolean = false;
+
+  // Tooltip information
+  helpMode: boolean = false;
+
+  activeTooltip: { text: string; x: number; y: number; position?: 'left' | 'right' } | null = null;
+
+  constructor(
+    private router: Router,
+    private supabaseService: SupabaseService,
+    private tradingContextService: TradingContextService,
+    private helpModeService: HelpModeService,
+    private retailSimulationService: RetailSimulationService,
+    private botSimulationService: BotSimulationService,
+  ) {}
+
+  async ngOnInit(): Promise<void> {
+    // Check if we have a stored username
+    const storedUsername = localStorage.getItem('trading_username');
+    if (storedUsername) {
+      await this.loginAsTrader(storedUsername);
+    } else {
+      this.isLoading = false;
+      this.currentView = 'login';
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.supabaseService.unsubscribeAll();
+    this.retailSimulationService.stopAll();
+    this.botSimulationService.stopAll();
+    this.botPollIntervals.forEach(id => clearInterval(id));
+    this.botPollIntervals = [];
+    if (this.priceSeriesRebuildTimer) {
+      clearTimeout(this.priceSeriesRebuildTimer);
+      this.priceSeriesRebuildTimer = null;
+    }
+
+    if (this.copiedHintTimer) {
+      clearTimeout(this.copiedHintTimer);
+      this.copiedHintTimer = null;
+    }
+  }
+
+  /**
+   * Login as a trader - now goes to environment selection
+   */
+  async loginAsTrader(username: string): Promise<void> {
+    if (!username.trim()) {
+      this.connectionError = 'Please enter a username';
+      return;
+    }
+
+    this.isLoggingIn = true;
+    this.connectionError = null;
+
+    try {
+      // Get or create the trader
+      this.trader = await this.supabaseService.getOrCreateTrader(username.trim());
+      if (!this.trader) {
+        throw new Error('Failed to create trader account');
+      } 
+
+      this.traderId = this.trader.id;
+      this.traderUsername = this.trader.username;
+
+      // Store username for next time
+      localStorage.setItem('trading_username', username.trim());
+
+      // Load environments
+      await this.loadEnvironments();
+
+      // Move to environment selection
+      this.currentView = 'environment-select';
+      this.isLoading = false;
+      this.isLoggingIn = false;
+    } catch (error: any) {
+      console.error('Login error:', error);
+      this.connectionError = error.message || 'Failed to connect to trading server';
+      this.isLoggingIn = false;
+      this.isLoading = false;
+    }
+  }
+
+  /**
+   * Load available environments
+   */
+  async loadEnvironments(): Promise<void> {
+    this.publicEnvironments = await this.supabaseService.getPublicEnvironments();
+    this.myEnvironments = await this.supabaseService.getTraderEnvironments(this.traderId);
+    this.availableImportEnvironments = [...this.myEnvironments];
+  }
+
+  /**
+   * Show create environment form
+   */
+  showCreateEnvironment(): void {
+    this.currentView = 'create-environment';
+    this.resetCreateForm();
+  }
+
+  /**
+   * Show join environment form
+   */
+  showJoinEnvironment(env?: DbEnvironmentSearchResult): void {
+    this.currentView = 'join-environment';
+    this.searchResults = [];
+    this.environmentSearchTerm = '';
+    this.joinPassword = '';
+    this.joinEnvironmentId = '';
+    this.connectionError = null;
+
+    if (env) {
+      this.selectedEnvironmentToJoin = env;
+      this.joinEnvironmentId = env.id;
+    } else {
+      this.selectedEnvironmentToJoin = null;
+    }
+  }
+
+  /**
+   * Search environments by name
+   */
+  async searchEnvironments(): Promise<void> {
+    if (!this.environmentSearchTerm || this.environmentSearchTerm.length < 2) {
+      this.searchResults = [];
+      return;
+    }
+
+    this.isSearching = true;
+    try {
+      this.searchResults = await this.supabaseService.searchEnvironments(
+        this.environmentSearchTerm,
+      );
+    } catch (error) {
+      console.error('Error searching environments:', error);
+      this.searchResults = [];
+    }
+    this.isSearching = false;
+  }
+
+  /**
+   * Lookup environment by ID
+   */
+  async lookupEnvironmentById(): Promise<void> {
+    if (!this.joinEnvironmentId || this.joinEnvironmentId.length < 10) {
+      this.connectionError = 'Please enter a valid environment ID';
+      return;
+    }
+
+    this.isSearching = true;
+    this.connectionError = null;
+
+    try {
+      const env = await this.supabaseService.getEnvironmentByIdPublic(this.joinEnvironmentId);
+      if (env) {
+        this.selectedEnvironmentToJoin = env;
+      } else {
+        this.connectionError = 'Environment not found';
+        this.selectedEnvironmentToJoin = null;
+      }
+    } catch (error) {
+      console.error('Error looking up environment:', error);
+      this.connectionError = 'Failed to find environment';
+      this.selectedEnvironmentToJoin = null;
+    }
+
+    this.isSearching = false;
+  }
+
+  /**
+   * Select an environment from search results
+   */
+  selectEnvironmentFromSearch(env: DbEnvironmentSearchResult): void {
+    this.selectedEnvironmentToJoin = env;
+    this.joinEnvironmentId = env.id;
+    this.joinPassword = '';
+    this.connectionError = null;
+  }
+
+  /**
+   * Go back to environment selection
+   */
+  backToEnvironmentSelect(): void {
+    this.currentView = 'environment-select';
+    this.connectionError = null;
+    this.selectedEnvironmentToJoin = null;
+    this.searchResults = [];
+    this.environmentSearchTerm = '';
+  }
+
+  /**
+   * Reset create environment form
+   */
+  resetCreateForm(): void {
+    this.newEnvironment = {
+      name: '',
+      description: '',
+      is_private: false,
+      password: '',
+      starting_cash: 10000,
+      starting_shares: 100,
+      min_price_change: 0.01,
+      allow_shorting: false,
+      max_short_units: 0,
+    };
+    this.newStocks = [
+      {
+        symbol: '',
+        name: '',
+        description: '',
+        startingPrice: 100,
+        minPriceChange: 0.01,
+        allowShorting: null,
+        maxShortUnits: null,
+      },
+    ];
+    this.importFromEnvironmentId = '';
+  }
+
+  /**
+   * Add a new stock to the creation form
+   */
+  addStock(): void {
+    this.newStocks.push({
+      symbol: '',
+      name: '',
+      description: '',
+      startingPrice: 100,
+      minPriceChange: this.newEnvironment.min_price_change,
+      allowShorting: null,
+      maxShortUnits: null,
+    });
+  }
+
+  /**
+   * Remove a stock from the creation form
+   */
+  removeStock(index: number): void {
+    if (this.newStocks.length > 1) {
+      this.newStocks.splice(index, 1);
+    }
+  }
+
+  /**
+   * Import settings from another environment
+   */
+  async importSettings(): Promise<void> {
+    if (!this.importFromEnvironmentId) return;
+
+    const env = await this.supabaseService.getEnvironment(this.importFromEnvironmentId);
+    if (env) {
+      this.newEnvironment.starting_cash = Number(env.starting_cash);
+      this.newEnvironment.starting_shares = env.starting_shares;
+      this.newEnvironment.min_price_change = Number(env.min_price_change);
+      this.newEnvironment.allow_shorting = env.allow_shorting;
+      this.newEnvironment.max_short_units = env.max_short_units;
+
+      // Import stocks
+      const stocks = await this.supabaseService.getEnvironmentStocks(env.id);
+      if (stocks.length > 0) {
+        this.newStocks = stocks.map((s) => ({
+          symbol: s.symbol,
+          name: s.name || '',
+          description: s.description || '',
+          startingPrice: Number(s.starting_price),
+          minPriceChange: Number(s.min_price_change),
+          allowShorting: s.allow_shorting,
+          maxShortUnits: s.max_short_units,
+        }));
+      }
+    }
+  }
+
+  /**
+   * Create a new environment
+   */
+  async createEnvironment(): Promise<void> {
+    if (!this.newEnvironment.name.trim()) {
+      this.connectionError = 'Please enter an environment name';
+      return;
+    }
+
+    // Validate password for private environments
+    if (this.newEnvironment.is_private) {
+      if (!this.newEnvironment.password || this.newEnvironment.password.trim() === '') {
+        this.connectionError = 'Please enter a password for the private environment';
+        return;
+      }
+      if (this.newEnvironment.password.trim().length < 4) {
+        this.connectionError = 'Password must be at least 4 characters';
+        return;
+      }
+    }
+
+    // Validate stocks
+    const validStocks = this.newStocks.filter((s) => s.symbol.trim());
+    if (validStocks.length === 0) {
+      this.connectionError = 'Please add at least one stock';
+      return;
+    }
+
+    this.isLoading = true;
+    this.connectionError = null;
+
+    try {
+      const stocks: CreateStockInput[] = validStocks.map((s) => ({
+        symbol: s.symbol.trim().toUpperCase(),
+        name: s.name.trim() || s.symbol.trim().toUpperCase(),
+        description: s.description.trim() || undefined,
+        starting_price: s.startingPrice,
+        min_price_change: s.minPriceChange,
+        allow_shorting: s.allowShorting ?? undefined,
+        max_short_units: s.maxShortUnits ?? undefined,
+      }));
+
+      console.log('Creating environment:', {
+        name: this.newEnvironment.name,
+        is_private: this.newEnvironment.is_private,
+        has_password: !!this.newEnvironment.password,
+      });
+
+      const env = await this.supabaseService.createEnvironment(
+        this.traderId,
+        this.newEnvironment,
+        stocks,
+      );
+
+      if (!env) {
+        throw new Error('Failed to create environment. Check that the database tables exist.');
+      }
+
+      console.log('Environment created, joining:', env.id);
+
+      // Join the created environment (creator auto-joins as admin)
+      await this.joinEnvironmentById(env.id);
+    } catch (error: any) {
+      console.error('Error creating environment:', error);
+      this.connectionError = error.message || 'Failed to create environment';
+      this.isLoading = false;
+    }
+  }
+
+  /**
+   * Join an environment by ID
+   */
+  async joinEnvironmentById(environmentId: string, password?: string): Promise<void> {
+    this.isLoading = true;
+    this.connectionError = null;
+
+    try {
+      // Get participant (or join) - now throws errors with specific codes
+      this.participant = await this.supabaseService.joinEnvironment(
+        environmentId,
+        this.traderId,
+        false,
+        password,
+      );
+
+      this.participantId = this.participant.id;
+      this.isAdmin = this.participant.is_admin;
+
+      // Get environment
+      this.currentEnvironment = await this.supabaseService.getEnvironment(environmentId);
+      if (!this.currentEnvironment) {
+        throw new Error('Environment not found');
+      }
+
+      this.environmentId = this.currentEnvironment.id;
+      this.isPaused = this.currentEnvironment.is_paused;
+
+      // Update trading context
+      this.tradingContextService.setContext({
+        environmentId: this.environmentId,
+        participantId: this.participantId,
+        stockId: null // Will be set when stock is selected
+      });
+
+      // Check if user is creator (admin)
+      if (this.currentEnvironment.creator_id === this.traderId) {
+        this.isAdmin = true;
+      }
+
+      // Load environment data
+      await this.loadEnvironmentData();
+
+      // Subscribe to real-time updates
+      this.subscribeToEnvironmentUpdates();
+
+      this.isConnected = true;
+      this.currentView = 'trading';
+      this.isLoading = false;
+    } catch (error: any) {
+      console.error('Error joining environment:', error);
+
+      // Handle specific error codes
+      if (error.message === 'PASSWORD_REQUIRED') {
+        this.connectionError = 'Password is required for this private environment';
+      } else if (error.message === 'INVALID_PASSWORD') {
+        this.connectionError = 'Incorrect password. Please check with the environment creator.';
+      } else {
+        this.connectionError = error.message || 'Failed to join environment';
+      }
+
+      this.isLoading = false;
+    }
+  }
+
+  /**
+   * Join selected environment (from join form)
+   */
+  async joinSelectedEnvironment(): Promise<void> {
+    if (!this.selectedEnvironmentToJoin) {
+      this.connectionError = 'Please select an environment';
+      return;
+    }
+
+    await this.joinEnvironmentById(
+      this.selectedEnvironmentToJoin.id,
+      this.selectedEnvironmentToJoin.is_private ? this.joinPassword : undefined,
+    );
+  }
+
+  /**
+   * Load environment data (stocks, positions, etc.)
+   */
+  async loadEnvironmentData(): Promise<void> {
+    if (!this.environmentId || !this.participantId) return;
+
+    // Load stocks
+    this.environmentStocks = await this.supabaseService.getEnvironmentStocks(this.environmentId);
+
+    // Select first stock by default
+    if (this.environmentStocks.length > 0 && !this.selectedStock) {
+      await this.selectStock(this.environmentStocks[0]);
+    }
+
+    // Initialise bot target stocks to first stock
+    if (this.environmentStocks.length > 0) {
+      const firstId = this.environmentStocks[0].id;
+      if (!this.mmBotTargetStockId) this.mmBotTargetStockId = firstId;
+      if (!this.retailBotTargetStockId) this.retailBotTargetStockId = firstId;
+    }
+
+    // Load positions
+    this.environmentPositions = await this.supabaseService.getParticipantPositions(
+      this.environmentId,
+      this.participantId,
+    );
+
+    // Load cash from participant
+    if (this.participant) {
+      this.cash = Number(this.participant.cash);
+      this.settledCash = Number(this.participant.settled_cash);
+      this.availableCash = Number(this.participant.available_cash);
+    }
+
+    // Update position for selected stock
+    this.updateCurrentPosition();
+
+    // Populate leaderboard
+    this.loadLeaderboard();
+  }
+
+  /**
+   * Load leaderboard: all human participants ranked by cash
+   */
+  async loadLeaderboard(): Promise<void> {
+    if (!this.environmentId || !this.currentEnvironment) return;
+    this.isLoadingLeaderboard = true;
+    try {
+      const participants = await this.supabaseService.getEnvironmentParticipants(this.environmentId);
+      const startingCash = this.currentEnvironment.starting_cash ?? 10000;
+      this.leaderboardEntries = participants
+        .filter(p => !(p.trader?.username ?? '').startsWith('BOT_'))
+        .map((p, i) => ({
+          rank: i + 1,
+          username: p.trader?.username ?? 'Unknown',
+          cash: Number(p.cash),
+          cashChange: Number(p.cash) - startingCash,
+          isCurrentUser: p.trader_id === this.traderId,
+        }));
+    } catch (e) {
+      console.error('Failed to load leaderboard:', e);
+    } finally {
+      this.isLoadingLeaderboard = false;
+    }
+  }
+
+  /**
+   * Called when the MM volatility dropdown changes; show/hide custom params panel.
+   */
+  onMmVolatilityChange(): void {
+    this.showMmCustomParams = this.mmBotVolatility === 'custom';
+  }
+
+  /**
+   * Select a stock to trade
+   */
+  async selectStock(stock: DbEnvironmentStock): Promise<void> {
+    this.selectedStock = stock;
+    this.selectedStockId = stock.id;
+    this.symbol = stock.symbol;
+
+    // Update trading context
+    this.tradingContextService.setContext({
+      stockId: this.selectedStockId
+    });
+
+    // Update position
+    this.updateCurrentPosition();
+
+    // Load orders and trades for this stock
+    await this.loadStockData();
+
+    // Re-bind realtime channels to the newly selected stock.
+    this.subscribeToEnvironmentUpdates();
+
+    if (this.activeTab === 'graph') {
+      setTimeout(() => this.makePriceChart(), 0);
+    }
+  }
+
+  /**
+   * Load orders and trades for current stock
+   */
+  async loadStockData(): Promise<void> {
+    if (!this.environmentId || !this.selectedStockId) return;
+
+    // Load orders
+    const orders = await this.supabaseService.getEnvironmentOpenOrders(
+      this.environmentId,
+      this.selectedStockId,
+    );
+    this.environmentOrders = orders;
+    await this.updateEnvironmentOrderBook();
+
+    // Load my orders
+    this.myEnvironmentOrders = await this.supabaseService.getParticipantOrders(
+      this.participantId,
+      this.selectedStockId,
+    );
+    this.updateMyOrdersFromEnvironment();
+
+    // Load trades
+    this.environmentTrades = await this.supabaseService.getEnvironmentTrades(
+      this.environmentId,
+      this.selectedStockId,
+    );
+    this.updateTradesFromEnvironment();
+  }
+
+  /**
+   * Update current position based on selected stock
+   */
+  updateCurrentPosition(): void {
+    if (!this.selectedStockId || !this.environmentPositions.length) {
+      this.positionUnits = 0;
+      this.positionAvgPrice = 0;
+      return;
+    }
+
+    const pos = this.environmentPositions.find((p) => p.stock_id === this.selectedStockId);
+    if (pos) {
+      this.positionUnits = pos.units;
+      this.positionAvgPrice = Number(pos.avg_price);
+    } else {
+      this.positionUnits = 0;
+      this.positionAvgPrice = 0;
+    }
+  }
+
+  /**
+   * Subscribe to real-time updates for the environment
+   */
+  subscribeToEnvironmentUpdates(): void {
+    if (!this.environmentId || !this.selectedStockId) return;
+
+    // Subscribe to environment changes (pause state, etc.)
+    this.supabaseService.subscribeToEnvironment(this.environmentId, (env) => {
+      if (env) {
+        this.currentEnvironment = env;
+        this.isPaused = env.is_paused;
+      }
+    });
+
+    // Subscribe to orders
+    this.supabaseService.subscribeToEnvironmentOrders(
+      this.environmentId,
+      this.selectedStockId,
+      async (orders) => {
+        // Don't overwrite order data while a matching sweep is resolving crosses
+        if (this.isMatchingSweepRunning) return;
+        this.environmentOrders = orders;
+        await this.updateEnvironmentOrderBook();
+        this.loadMyOrders();
+      },
+    );
+
+    // Subscribe to trades
+    this.supabaseService.subscribeToEnvironmentTrades(
+      this.environmentId,
+      this.selectedStockId,
+      (trades) => {
+        this.environmentTrades = trades;
+        this.updateTradesFromEnvironment();
+        if (this.activeTab === 'graph') {
+          this.makePriceChart();
+        }
+      },
+    );
+
+    // Load previously dismissed message IDs from localStorage before subscribing
+    this.loadDismissedMessageIds();
+
+    // Subscribe to admin messages
+    this.supabaseService.subscribeToEnvironmentMessages(
+      this.environmentId,
+      (messages) => {
+        const previousLatest = this.adminMessages.length > 0 ? this.adminMessages[0]?.id : null;
+        this.adminMessages = messages;
+
+        // Show banner for new messages
+        if (messages.length > 0 && messages[0].id !== previousLatest) {
+          this.latestMessage = messages[0];
+          if (!this.dismissedMessageIds.has(messages[0].id)) {
+            this.showMessageBanner = true;
+          }
+        }
+      },
+    );
+  }
+
+  // ==================== ADMIN MESSAGE METHODS ====================
+
+  /**
+   * Send an admin message to all participants
+   */
+  async sendAdminMessage(): Promise<void> {
+    if (!this.newAdminMessage.trim() || !this.participantId || !this.environmentId) return;
+    if (!this.isAdmin) return;
+
+    this.isSendingMessage = true;
+    try {
+      await this.supabaseService.sendAdminMessage(
+        this.environmentId,
+        this.participantId,
+        this.traderUsername,
+        this.newAdminMessage,
+        this.adminMessageType,
+      );
+      this.newAdminMessage = '';
+      this.adminMessageType = 'info';
+      this.showMessageComposer = false;
+    } catch (error: any) {
+      console.error('Failed to send admin message:', error);
+    } finally {
+      this.isSendingMessage = false;
+    }
+  }
+
+  /**
+   * Dismiss the latest message banner
+   */
+  dismissMessageBanner(): void {
+    if (this.latestMessage) {
+      this.dismissedMessageIds.add(this.latestMessage.id);
+      this.saveDismissedMessageIds();
+    }
+    this.showMessageBanner = false;
+  }
+
+  /**
+   * Toggle the message composer panel
+   */
+  toggleMessageComposer(): void {
+    this.showMessageComposer = !this.showMessageComposer;
+    if (this.showMessageComposer) {
+      this.showMessageHistory = false;
+    }
+  }
+
+  /**
+   * Toggle the message history panel
+   */
+  toggleMessageHistory(): void {
+    this.showMessageHistory = !this.showMessageHistory;
+    if (this.showMessageHistory) {
+      this.showMessageComposer = false;
+      // Mark all current messages as read
+      this.adminMessages.forEach(m => this.dismissedMessageIds.add(m.id));
+      this.saveDismissedMessageIds();
+      this.showMessageBanner = false;
+    }
+  }
+
+  /**
+   * Format a message timestamp for display
+   */
+  formatMessageTime(dateStr: string): string {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  /**
+   * Get unread message count (messages not dismissed)
+   */
+  getUnreadMessageCount(): number {
+    return this.adminMessages.filter(m => !this.dismissedMessageIds.has(m.id)).length;
+  }
+
+  /**
+   * Load my orders for current stock
+   */
+  async loadMyOrders(): Promise<void> {
+    if (!this.participantId || !this.selectedStockId) return;
+    this.myEnvironmentOrders = await this.supabaseService.getParticipantOrders(
+      this.participantId,
+      this.selectedStockId,
+    );
+    this.updateMyOrdersFromEnvironment();
+  }
+
+  /**
+   * Update order book from environment orders
+   */
+  async updateEnvironmentOrderBook(): Promise<void> {
+    this.rebuildOrderBookFromEnvironmentOrders();
+
+    // If the raw best bid >= best ask (before display filtering), there are crossing
+    // orders that need to be matched. Trigger the sweep automatically.
+    if (this.bestBid !== null && this.bestAsk !== null && this.bestBid >= this.bestAsk) {
+      await this.sweepCrossingOrders();
+    }
+  }
+
+  /**
+   * Rebuild bids/asks/spread from this.environmentOrders.
+   *
+   * The "display" spread is computed from the displayed book (after removing
+   * crossing orders so the UI never shows a negative spread). The raw best
+   * bid/ask are stored separately so sweepCrossingOrders can still find them.
+   */
+  private rebuildOrderBookFromEnvironmentOrders(): void {
+    // Collect all open individual orders with numeric prices
+    const rawBuys = this.environmentOrders
+      .filter(o => o.type === 'buy' && (o.status === 'open' || o.status === 'partial'))
+      .map(o => ({ ...o, price: Number(o.price), remaining: o.units - o.filled_units }))
+      .filter(o => o.remaining > 0)
+      .sort((a, b) => b.price - a.price); // highest bid first
+
+    const rawSells = this.environmentOrders
+      .filter(o => o.type === 'sell' && (o.status === 'open' || o.status === 'partial'))
+      .map(o => ({ ...o, price: Number(o.price), remaining: o.units - o.filled_units }))
+      .filter(o => o.remaining > 0)
+      .sort((a, b) => a.price - b.price); // lowest ask first
+
+    // Raw best bid/ask (before any filtering) — used by settle logic and sweep trigger
+    this.bestBid = rawBuys.length > 0 ? rawBuys[0].price : null;
+    this.bestAsk = rawSells.length > 0 ? rawSells[0].price : null;
+    // hasCross is true when a non-self cross exists (different participants)
+    this.hasCross =
+      this.bestBid !== null &&
+      this.bestAsk !== null &&
+      this.bestBid >= this.bestAsk &&
+      rawBuys[0].participant_id !== rawSells[0].participant_id;
+
+    // Build the DISPLAYED order book by removing all crossing price levels.
+    // We step through bids high→low and asks low→high; any bid.price >= ask.price
+    // means those levels are in-flight and should be hidden until matched.
+    const filteredBuys = [...rawBuys];
+    const filteredSells = [...rawSells];
+
+    // Keep removing the top cross until none remains.
+    // If a top bid and top ask cross but belong to the same participant we
+    // still remove them from display (they'll appear as "pending" — a 
+    // same-participant self-cross is invalid anyway and the settle skips it).
+    let changed = true;
+    while (changed && filteredBuys.length > 0 && filteredSells.length > 0) {
+      changed = false;
+      const topBid = filteredBuys[0];
+      const topAsk = filteredSells[0];
+      if (topBid.price >= topAsk.price) {
+        filteredBuys.shift();
+        filteredSells.shift();
+        changed = true;
+      }
+    }
+
+    // Aggregate displayed bids by price level
+    const bidMap = new Map<number, { units: number; isMine: boolean; count: number }>();
+    for (const o of filteredBuys) {
+      const entry = bidMap.get(o.price) ?? { units: 0, isMine: false, count: 0 };
+      entry.units += o.remaining;
+      entry.count++;
+      if (o.participant_id === this.participantId) entry.isMine = true;
+      bidMap.set(o.price, entry);
+    }
+    this.bids = Array.from(bidMap.entries())
+      .map(([price, d]) => ({ price, units: d.units, isMine: d.isMine, orderCount: d.count }))
+      .sort((a, b) => b.price - a.price);
+
+    // Aggregate displayed asks by price level
+    const askMap = new Map<number, { units: number; isMine: boolean; count: number }>();
+    for (const o of filteredSells) {
+      const entry = askMap.get(o.price) ?? { units: 0, isMine: false, count: 0 };
+      entry.units += o.remaining;
+      entry.count++;
+      if (o.participant_id === this.participantId) entry.isMine = true;
+      askMap.set(o.price, entry);
+    }
+    this.asks = Array.from(askMap.entries())
+      .map(([price, d]) => ({ price, units: d.units, isMine: d.isMine, orderCount: d.count }))
+      .sort((a, b) => a.price - b.price);
+
+    // Display spread is from the FILTERED book — guaranteed ≥ 0
+    const displayBid = this.bids.length > 0 ? this.bids[0].price : null;
+    const displayAsk = this.asks.length > 0 ? this.asks[0].price : null;
+    this.spread = displayBid !== null && displayAsk !== null
+      ? +(displayAsk - displayBid).toFixed(2)
+      : null;
+  }
+
+  /**
+   * Core settlement loop: loads fresh orders from DB, matches any crossing
+   * bid/ask pairs (skipping same-participant self-crosses), and returns the
+   * number of trades executed.  Caller is responsible for re-entrancy guards.
+   */
+  private async performSettlement(): Promise<number> {
+    let totalMatched = 0;
+    let keepMatching = true;
+
+    while (keepMatching) {
+      keepMatching = false;
+
+      const openOrders = await this.supabaseService.getEnvironmentOpenOrders(
+        this.environmentId,
+        this.selectedStockId,
+      );
+
+      const buyOrders = openOrders
+        .filter(o => o.type === 'buy' && (o.status === 'open' || o.status === 'partial'))
+        .sort((a, b) => Number(b.price) - Number(a.price));
+
+      const sellOrders = openOrders
+        .filter(o => o.type === 'sell' && (o.status === 'open' || o.status === 'partial'))
+        .sort((a, b) => Number(a.price) - Number(b.price));
+
+      if (buyOrders.length === 0 || sellOrders.length === 0) break;
+
+      // Walk the book to find the first cross with DIFFERENT participants
+      let matched = false;
+      outer: for (const bid of buyOrders) {
+        for (const ask of sellOrders) {
+          if (Number(bid.price) < Number(ask.price)) break outer; // no more crosses
+          if (bid.participant_id === ask.participant_id) continue;  // skip self-cross
+          await this.executeEnvironmentTrade(bid, ask);
+          totalMatched++;
+          keepMatching = true;
+          matched = true;
+          break outer; // restart the loop with fresh orders
+        }
+      }
+      if (!matched) break; // only same-participant crosses remain — nothing to do
+    }
+
+    // Refresh local state after settlement
+    const freshOrders = await this.supabaseService.getEnvironmentOpenOrders(
+      this.environmentId,
+      this.selectedStockId,
+    );
+    this.environmentOrders = freshOrders;
+    this.rebuildOrderBookFromEnvironmentOrders();
+    this.loadMyOrders();
+
+    return totalMatched;
+  }
+
+  /**
+   * Sweep the order book and match all crossing orders (bestBid >= bestAsk).
+   * Called automatically when a new order arrives that crosses the book.
+   */
+  private async sweepCrossingOrders(): Promise<void> {
+    if (this.isMatchingSweepRunning) return;
+    this.isMatchingSweepRunning = true;
+    try {
+      await this.performSettlement();
+    } catch (error) {
+      console.error('Error in sweepCrossingOrders:', error);
+    } finally {
+      this.isMatchingSweepRunning = false;
+    }
+  }
+
+  /**
+   * Update my orders from environment orders
+   */
+  updateMyOrdersFromEnvironment(): void {
+    this.myOrders = this.myEnvironmentOrders.map((o) => ({
+      id: o.id,
+      type: o.type,
+      price: Number(o.price),
+      units: o.units,
+      filled_units: o.filled_units,
+      status: o.status,
+      created_at: o.created_at,
+      trader_id: o.participant_id,
+    }));
+  }
+
+  /**
+   * Update trades from environment trades
+   */
+  updateTradesFromEnvironment(): void {
+    this.trades = this.environmentTrades.map((t) => ({
+      id: t.id,
+      market_id: t.market_id,
+      buy_order_id: t.buy_order_id,
+      sell_order_id: t.sell_order_id,
+      buyer_id: t.buyer_participant_id,
+      seller_id: t.seller_participant_id,
+      price: t.price,
+      units: t.units,
+      created_at: t.created_at,
+    }));
+
+    if (this.selectedStockId) {
+      this.stockTradeMap[this.selectedStockId] = [...this.trades];
+    }
+
+    if (this.trades.length > 0) {
+      this.lastPrice = Number(this.trades[0].price);
+    }
+
+    // Keep the live order book chart in sync in environment mode.
+    this.rebuildPriceSeriesFromTrades();
+  }
+
+  /**
+   * Toggle pause state (admin only)
+   */
+  async togglePause(): Promise<void> {
+    if (!this.isAdmin || !this.environmentId) return;
+
+    const newPauseState = !this.isPaused;
+    const reason = newPauseState ? 'Trading paused by administrator' : undefined;
+
+    const success = await this.supabaseService.toggleEnvironmentPause(
+      this.environmentId,
+      newPauseState,
+      reason,
+    );
+
+    if (success) {
+      this.isPaused = newPauseState;
+    }
+  }
+
+  /**
+   * Leave current environment and go back to selection
+   */
+  leaveEnvironment(): void {
+    this.supabaseService.unsubscribeAll();
+    this.retailSimulationService.stopAll();
+    this.activeRetailSimStocks.clear();
+    this.botSimulationService.stopAll();
+    this.activeMmSimStocks.clear();
+    this.botPollIntervals.forEach(id => clearInterval(id));
+    this.botPollIntervals = [];
+    this.mmBotTargetStockId = '';
+    this.retailBotTargetStockId = '';
+    this.isConnected = false;
+    this.currentEnvironment = null;
+    this.environmentId = '';
+    this.participant = null;
+    this.participantId = '';
+    this.selectedStock = null;
+    this.selectedStockId = '';
+    this.environmentStocks = [];
+    this.environmentPositions = [];
+    this.environmentOrders = [];
+    this.environmentTrades = [];
+    this.myEnvironmentOrders = [];
+    this.bids = [];
+    this.asks = [];
+    this.trades = [];
+    this.myOrders = [];
+    
+    // Clear trading context
+    this.tradingContextService.clearContext();
+    
+    this.loadEnvironments();
+    this.currentView = 'environment-select';
+  }
+
+  /**
+   * Logout
+   */
+  logout(): void {
+    localStorage.removeItem('trading_username');
+    this.supabaseService.unsubscribeAll();
+    this.isConnected = false;
+    this.trader = null;
+    this.traderId = '';
+    this.traderUsername = '';
+    this.usernameInput = '';
+    this.currentEnvironment = null;
+    this.environmentId = '';
+    this.participant = null;
+    this.participantId = '';
+    this.currentView = 'login';
+  }
+
+  /**
+   * Subscribe to real-time updates (legacy - for non-environment trading)
+   */
+  private subscribeToUpdates(): void {
+    // Subscribe to orders
+    this.supabaseService.subscribeToOrders(this.marketId, async (orders) => {
+      this.allOrders = orders;
+      await this.updateOrderBook();
+      this.updateMyOrders();
+    });
+
+    // Subscribe to trades
+    this.supabaseService.subscribeToTrades(this.marketId, (trades) => {
+      this.trades = trades;
+      if (trades.length > 0) {
+        this.lastPrice = Number(trades[0].price);
+      }
+
+      this.rebuildPriceSeriesFromTrades();
+    });
+
+    // Subscribe to trader updates
+    this.supabaseService.subscribeToTrader(this.traderId, (trader) => {
+      if (trader) {
+        this.trader = trader;
+        this.cash = Number(trader.cash);
+        this.settledCash = Number(trader.settled_cash);
+        this.availableCash = Number(trader.available_cash);
+      }
+    });
+  }
+
+  private rebuildPriceSeriesFromTrades(): void {
+    // Coalesce rapid-fire inserts (demo bots) to avoid rebuilding on every tick.
+    if (this.priceSeriesRebuildTimer) return;
+
+    const now = Date.now();
+    const elapsed = now - this.lastPriceSeriesRebuildAt;
+    const delay = elapsed >= this.priceSeriesRebuildMinIntervalMs
+      ? 0
+      : this.priceSeriesRebuildMinIntervalMs - elapsed;
+
+    this.priceSeriesRebuildTimer = setTimeout(() => {
+      this.priceSeriesRebuildTimer = null;
+      this.lastPriceSeriesRebuildAt = Date.now();
+      this.rebuildPriceSeriesFromTradesNow();
+    }, delay);
+  }
+
+  private rebuildPriceSeriesFromTradesNow(): void {
+    const datasetTemplate = (this.priceChartData.datasets?.[0] as any) ?? {};
+    const maxPoints = 250;
+
+    const trades = this.trades ?? [];
+    if (trades.length === 0) {
+      this.tradePointTimes = [];
+      this.priceChartData = {
+        datasets: [
+          {
+            ...datasetTemplate,
+            data: [],
+          },
+        ],
+      };
+      queueMicrotask(() => this.priceChartDirective?.update());
+      return;
+    }
+
+    // Most service calls already return newest-first; avoid O(n log n) sort when possible.
+    const maybeDesc =
+      trades.length < 2 ||
+      new Date(trades[0].created_at).getTime() >= new Date(trades[1].created_at).getTime();
+
+    const clippedOldestToNewest: DbTrade[] = (() => {
+      if (maybeDesc) {
+        const latest = trades.length > maxPoints ? trades.slice(0, maxPoints) : trades.slice();
+        return latest.slice().reverse();
+      }
+
+      const sorted = trades
+        .slice()
+        .sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        );
+      return sorted.length > maxPoints ? sorted.slice(-maxPoints) : sorted;
+    })();
+
+    const points: Array<{ x: number; y: number }> = [];
+    const times: number[] = [];
+
+    for (const t of clippedOldestToNewest) {
+      const ts = new Date(t.created_at).getTime();
+      const price = Number(t.price);
+      if (!Number.isFinite(price)) continue;
+      times.push(Number.isFinite(ts) ? ts : NaN);
+      points.push({ x: points.length, y: price });
+    }
+
+    this.tradePointTimes = times;
+
+    // Replace dataset reference to keep Angular + ng2-charts change detection happy.
+    this.priceChartData = {
+      datasets: [
+        {
+          ...datasetTemplate,
+          data: points,
+          tension: 0.4,
+          cubicInterpolationMode: 'monotone',
+        },
+      ],
+    };
+
+    // Ensure the directive redraws even if the canvas stays mounted.
+    queueMicrotask(() => this.priceChartDirective?.update('none'));
+  }
+
+  /**
+   * Update my orders from all orders (legacy)
+   */
+  private updateMyOrders(): void {
+    // Now handled by updateMyOrdersFromEnvironment
+  }
+
+  /**
+   * Set order type (buy/sell)
+   */
+  setOrderType(type: 'buy' | 'sell'): void {
+    this.orderType = type;
+  }
+
+  /**
+   * Increment units
+   */
+  incrementUnits(): void {
+    if (this.orderUnits < this.maxUnits) {
+      this.orderUnits++;
+    }
+  }
+
+  /**
+   * Decrement units
+   */
+  decrementUnits(): void {
+    if (this.orderUnits > 1) {
+      this.orderUnits--;
+    }
+  }
+
+  /**
+   * Increment price
+   */
+  incrementPrice(): void {
+    this.orderPrice = Math.min(this.maxPrice, +(this.orderPrice + 0.5).toFixed(2));
+  }
+
+  /**
+   * Decrement price
+   */
+  decrementPrice(): void {
+    this.orderPrice = Math.max(0, +(this.orderPrice - 0.5).toFixed(2));
+  }
+
+  /**
+   * Place an order (environment-based)
+   */
+  async placeOrder(): Promise<void> {
+    if (this.orderUnits <= 0 || this.orderPrice <= 0) {
+      return;
+    }
+
+    if (this.isPlacingOrder) {
+      return;
+    }
+
+    // Check if market is paused
+    if (this.isPaused) {
+      alert('Trading is currently paused');
+      return;
+    }
+
+    // Validate order
+    if (this.orderType === 'buy') {
+      const totalCost = this.orderPrice * this.orderUnits;
+      if (totalCost > this.availableCash) {
+        alert('Insufficient funds for this order');
+        return;
+      }
+    } else {
+      // For sell orders, check if we have enough units
+      const openSellUnits = this.myOrders
+        .filter((o) => o.type === 'sell' && (o.status === 'open' || o.status === 'partial'))
+        .reduce((sum, o) => sum + (o.units - o.filled_units), 0);
+
+      const availableToSell = this.positionUnits - openSellUnits;
+
+      // Check shorting rules
+      if (this.orderUnits > availableToSell) {
+        const shortAmount = this.orderUnits - availableToSell;
+
+        // Check if shorting is allowed
+        const stockAllowsShorting =
+          this.selectedStock?.allow_shorting ?? this.currentEnvironment?.allow_shorting;
+        if (!stockAllowsShorting) {
+          alert('Insufficient units to sell. Shorting is not allowed in this environment.');
+          return;
+        }
+
+        // Check max short limit
+        const maxShort =
+          this.selectedStock?.max_short_units ?? this.currentEnvironment?.max_short_units ?? 0;
+        const currentShort = Math.abs(Math.min(0, availableToSell));
+        if (currentShort + shortAmount > maxShort) {
+          alert(`Cannot short more than ${maxShort} units. Current short: ${currentShort}`);
+          return;
+        }
+      }
+    }
+
+    this.isPlacingOrder = true;
+
+    try {
+      // Place the order in the environment
+      const newOrder = await this.supabaseService.placeEnvironmentOrder({
+        market_id: this.environmentId,
+        stock_id: this.selectedStockId,
+        participant_id: this.participantId,
+        type: this.orderType,
+        price: this.orderPrice,
+        units: this.orderUnits,
+        filled_units: 0,
+        status: 'open',
+      });
+
+      if (!newOrder) {
+        throw new Error('Failed to place order');
+      }
+
+      // Reserve cash for buy orders
+      if (this.orderType === 'buy') {
+        const totalCost = this.orderPrice * this.orderUnits;
+        this.availableCash -= totalCost;
+        await this.supabaseService.updateParticipantCash(
+          this.participantId,
+          this.cash,
+          this.settledCash,
+          this.availableCash,
+        );
+      }
+
+      // Try to match the order
+      await this.matchEnvironmentOrder(newOrder);
+
+      // Reset form
+      this.orderUnits = 1;
+      this.orderPrice = 0;
+    } catch (error: any) {
+      console.error('Error placing order:', error);
+      alert('Failed to place order: ' + error.message);
+    } finally {
+      this.isPlacingOrder = false;
+    }
+  }
+
+  /**
+   * Match an order against the order book (environment-based)
+   */
+  private async matchEnvironmentOrder(incomingOrder: DbEnvironmentOrder): Promise<void> {
+    // Reload orders to get the latest state
+    const openOrders = await this.supabaseService.getEnvironmentOpenOrders(
+      this.environmentId,
+      this.selectedStockId,
+    );
+
+    if (incomingOrder.type === 'buy') {
+      // Match with sell orders at or below the buy price
+      const matchingAsks = openOrders
+        .filter(
+          (o) =>
+            o.type === 'sell' &&
+            (o.status === 'open' || o.status === 'partial') &&
+            Number(o.price) <= Number(incomingOrder.price) &&
+            o.participant_id !== incomingOrder.participant_id &&
+            o.id !== incomingOrder.id,
+        )
+        .sort(
+          (a, b) =>
+            Number(a.price) - Number(b.price) ||
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        );
+
+      for (const ask of matchingAsks) {
+        const incomingRemaining = incomingOrder.units - incomingOrder.filled_units;
+        if (incomingRemaining <= 0) break;
+        await this.executeEnvironmentTrade(incomingOrder, ask);
+      }
+    } else {
+      // Match with buy orders at or above the sell price
+      const matchingBids = openOrders
+        .filter(
+          (o) =>
+            o.type === 'buy' &&
+            (o.status === 'open' || o.status === 'partial') &&
+            Number(o.price) >= Number(incomingOrder.price) &&
+            o.participant_id !== incomingOrder.participant_id &&
+            o.id !== incomingOrder.id,
+        )
+        .sort(
+          (a, b) =>
+            Number(b.price) - Number(a.price) ||
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        );
+
+      for (const bid of matchingBids) {
+        const incomingRemaining = incomingOrder.units - incomingOrder.filled_units;
+        if (incomingRemaining <= 0) break;
+        await this.executeEnvironmentTrade(bid, incomingOrder);
+      }
+    }
+  }
+
+  /**
+   * Execute a trade between a buy and sell order (environment-based).
+   * Always reloads both orders fresh from DB so filled_units is current.
+   */
+  private async executeEnvironmentTrade(
+    buyOrder: DbEnvironmentOrder,
+    sellOrder: DbEnvironmentOrder,
+  ): Promise<void> {
+    // Reload both orders from DB to get the most up-to-date filled_units
+    const [freshBuy, freshSell] = await Promise.all([
+      this.supabaseService.getEnvironmentOrderById(buyOrder.id),
+      this.supabaseService.getEnvironmentOrderById(sellOrder.id),
+    ]);
+
+    // If either order was filled or cancelled since we last looked, skip
+    if (!freshBuy || !freshSell) return;
+    if (freshBuy.status === 'filled' || freshBuy.status === 'cancelled') return;
+    if (freshSell.status === 'filled' || freshSell.status === 'cancelled') return;
+
+    // Use fresh copies for all calculations
+    buyOrder = freshBuy;
+    sellOrder = freshSell;
+
+    const buyRemaining = buyOrder.units - buyOrder.filled_units;
+    const sellRemaining = sellOrder.units - sellOrder.filled_units;
+    const tradeUnits = Math.min(buyRemaining, sellRemaining);
+    // Use midpoint price — fair for both sides
+    const tradePrice = +((Number(buyOrder.price) + Number(sellOrder.price)) / 2).toFixed(2);
+
+    if (tradeUnits <= 0) return;
+
+    // Record the trade
+    await this.supabaseService.recordEnvironmentTrade({
+      market_id: this.environmentId,
+      stock_id: this.selectedStockId,
+      buy_order_id: buyOrder.id,
+      sell_order_id: sellOrder.id,
+      buyer_participant_id: buyOrder.participant_id,
+      seller_participant_id: sellOrder.participant_id,
+      price: tradePrice,
+      units: tradeUnits,
+    });
+
+    // Update buy order
+    const newBuyFilled = buyOrder.filled_units + tradeUnits;
+    const buyStatus = newBuyFilled >= buyOrder.units ? 'filled' : 'partial';
+    await this.supabaseService.updateEnvironmentOrder(buyOrder.id, {
+      filled_units: newBuyFilled,
+      status: buyStatus,
+    });
+    buyOrder.filled_units = newBuyFilled;
+    buyOrder.status = buyStatus;
+
+    // Update sell order
+    const newSellFilled = sellOrder.filled_units + tradeUnits;
+    const sellStatus = newSellFilled >= sellOrder.units ? 'filled' : 'partial';
+    await this.supabaseService.updateEnvironmentOrder(sellOrder.id, {
+      filled_units: newSellFilled,
+      status: sellStatus,
+    });
+    sellOrder.filled_units = newSellFilled;
+    sellOrder.status = sellStatus;
+
+    // Update participant positions and cash
+    if (buyOrder.participant_id === this.participantId) {
+      const cost = tradePrice * tradeUnits;
+      this.settledCash -= cost;
+
+      // Update position
+      const prevUnits = this.positionUnits;
+      this.positionUnits += tradeUnits;
+      if (this.positionUnits > 0) {
+        this.positionAvgPrice = (this.positionAvgPrice * prevUnits + cost) / this.positionUnits;
+      }
+
+      // Refund excess reserved cash
+      const priceDifference = (Number(buyOrder.price) - tradePrice) * tradeUnits;
+      if (buyStatus === 'filled') {
+        this.availableCash += priceDifference;
+      }
+
+      await this.updateParticipantAndPosition();
+    }
+
+    if (sellOrder.participant_id === this.participantId) {
+      const revenue = tradePrice * tradeUnits;
+      this.settledCash += revenue;
+      this.availableCash += revenue;
+      this.positionUnits -= tradeUnits;
+
+      await this.updateParticipantAndPosition();
+    }
+
+    this.lastPrice = tradePrice;
+  }
+
+  /**
+   * Update participant cash and position in database
+   */
+  private async updateParticipantAndPosition(): Promise<void> {
+    await this.supabaseService.updateParticipantCash(
+      this.participantId,
+      this.cash,
+      this.settledCash,
+      this.availableCash,
+    );
+
+    // Find and update the position for current stock
+    const pos = this.environmentPositions.find((p) => p.stock_id === this.selectedStockId);
+    if (pos) {
+      await this.supabaseService.updateEnvironmentPosition(
+        pos.id,
+        this.positionUnits,
+        this.positionAvgPrice,
+      );
+    }
+
+    // Refresh leaderboard after each trade
+    this.loadLeaderboard();
+  }
+
+  /**
+   * Update the order book display (legacy - now handled by updateEnvironmentOrderBook)
+   */
+  private async updateOrderBook(): Promise<void> {
+    // Now handled by updateEnvironmentOrderBook
+    await this.updateEnvironmentOrderBook();
+  }
+
+  /**
+   * Cancel an order (environment-based)
+   */
+  async cancelOrder(order: LocalOrder): Promise<void> {
+    try {
+      await this.supabaseService.cancelEnvironmentOrder(order.id);
+
+      // Refund reserved cash for buy orders
+      if (order.type === 'buy') {
+        const unfilledUnits = order.units - order.filled_units;
+        this.availableCash += order.price * unfilledUnits;
+        await this.supabaseService.updateParticipantCash(
+          this.participantId,
+          this.cash,
+          this.settledCash,
+          this.availableCash,
+        );
+      }
+    } catch (error) {
+      console.error('Error cancelling order:', error);
+      alert('Failed to cancel order');
+    }
+  }
+
+  /**
+   * Immediately match all crossing orders in the current environment order book.
+   * Triggered manually by the user via the Settle button.
+   */
+  async settleOrderBook(): Promise<void> {
+    if (this.isSettlingOrderBook || this.isMatchingSweepRunning) return;
+    this.isSettlingOrderBook = true;
+    try {
+      const totalMatched = await this.performSettlement();
+      if (totalMatched > 0) {
+        console.log(`✓ Settled ${totalMatched} crossing order pair(s)`);
+      }
+    } catch (error) {
+      console.error('Error settling order book:', error);
+    } finally {
+      this.isSettlingOrderBook = false;
+    }
+  }
+
+  /**
+   * Demo/admin convenience: cancel all open/partial orders in the current market.
+   * Also refunds this trader's reserved cash for any cancelled BUY orders.
+   */
+  async resetOrderBook(): Promise<void> {
+    if (!this.isConnected || !this.marketId) return;
+    if (this.isResettingOrderBook) return;
+
+    const ok = confirm(
+      'Reset order book? This cancels ALL open orders (buys + sells) for everyone in this market.',
+    );
+    if (!ok) return;
+
+    this.isResettingOrderBook = true;
+    try {
+      const refund = this.allOrders
+        .filter(
+          (o) =>
+            o.market_id === this.marketId &&
+            o.trader_id === this.traderId &&
+            o.type === 'buy' &&
+            (o.status === 'open' || o.status === 'partial'),
+        )
+        .reduce((sum, o) => sum + Number(o.price) * Math.max(0, o.units - o.filled_units), 0);
+
+      const cancelledCount = await this.supabaseService.cancelOpenOrdersForMarket(this.marketId);
+
+      // Optimistically update local state immediately (realtime will also reconcile).
+      this.allOrders = this.allOrders.map((o) => {
+        if (o.market_id !== this.marketId) return o;
+        if (o.status !== 'open' && o.status !== 'partial') return o;
+        return { ...o, status: 'cancelled', updated_at: new Date().toISOString() };
+      });
+
+      this.myOrders = this.myOrders.map((o) => {
+        if (o.status !== 'open' && o.status !== 'partial') return o;
+        return { ...o, status: 'cancelled' };
+      });
+
+      if (refund > 0) {
+        this.availableCash += refund;
+        await this.supabaseService.updateTraderCash(
+          this.traderId,
+          this.cash,
+          this.settledCash,
+          this.availableCash,
+        );
+      }
+
+      await this.updateOrderBook();
+
+      if (cancelledCount > 0) {
+        // Keep it simple + visible for demos.
+        alert(`Order book reset: cancelled ${cancelledCount} open orders.`);
+      } else {
+        alert('Order book reset: no open orders to cancel.');
+      }
+    } catch (error) {
+      console.error('Error resetting order book:', error);
+      alert('Failed to reset order book');
+    } finally {
+      this.isResettingOrderBook = false;
+    }
+  }
+
+  /**
+   * Toggle the retail investor simulation on/off for the selected bot target stock.
+   */
+  async toggleRetailSimulation(): Promise<void> {
+    const targetId = this.retailBotTargetStockId;
+    if (!targetId || !this.environmentId) return;
+
+    if (this.activeRetailSimStocks.has(targetId)) {
+      this.retailSimulationService.stop(targetId);
+      this.activeRetailSimStocks.delete(targetId);
+      return;
+    }
+
+    this.activeRetailSimStocks.add(targetId);
+    const result = await this.retailSimulationService.start(
+      this.environmentId,
+      targetId,
+      300, // 5 minutes
+      4,   // 4 retail bots
+      this.botTickSpeedMs,
+      this.retailAsymmetry,
+    );
+
+    if (!result.success) {
+      console.error('Retail simulation failed:', result.message);
+      this.activeRetailSimStocks.delete(targetId);
+      return;
+    }
+
+    console.log(result.message);
+
+    // Auto-remove when simulation ends naturally
+    const check = setInterval(() => {
+      if (!this.retailSimulationService.isActive(targetId)) {
+        this.activeRetailSimStocks.delete(targetId);
+        clearInterval(check);
+        this.botPollIntervals = this.botPollIntervals.filter(id => id !== check);
+      }
+    }, 2000);
+    this.botPollIntervals.push(check);
+  }
+
+  /**
+   * Toggle the market-maker bot simulation on/off for the selected bot target stock.
+   */
+  async toggleMmSimulation(): Promise<void> {
+    const targetId = this.mmBotTargetStockId;
+    if (!targetId || !this.environmentId) return;
+
+    if (this.activeMmSimStocks.has(targetId)) {
+      this.botSimulationService.stopSimulation(targetId);
+      this.activeMmSimStocks.delete(targetId);
+      return;
+    }
+
+    this.activeMmSimStocks.add(targetId);
+    const result = await this.botSimulationService.startSimulation(
+      this.environmentId,
+      targetId,
+      this.mmBotVolatility,
+      300, // 5 minutes
+      5,   // 5 market-maker bots
+      this.botTickSpeedMs,
+      (this.botTargetEnabled && this.botTargetPrice > 0) ? this.botTargetPrice : undefined,
+      this.mmBotVolatility === 'custom' ? this.mmCustomProfile : undefined,
+    );
+
+    if (!result.success) {
+      console.error('Market-maker simulation failed:', result.message);
+      this.activeMmSimStocks.delete(targetId);
+      return;
+    }
+
+    console.log(result.message);
+
+    // Auto-remove when simulation ends naturally
+    const check = setInterval(() => {
+      if (!this.botSimulationService.isSimulationRunning(targetId)) {
+        this.activeMmSimStocks.delete(targetId);
+        clearInterval(check);
+        this.botPollIntervals = this.botPollIntervals.filter(id => id !== check);
+      }
+    }, 2000);
+    this.botPollIntervals.push(check);
+  }
+
+  /** Toggle the target-price override on/off and push to all running MM sims. */
+  toggleBotTarget(): void {
+    this.botTargetEnabled = !this.botTargetEnabled;
+    this.syncBotTargetPrice();
+  }
+
+  /** Push the current target price (or null) to all running bot simulations. */
+  syncBotTargetPrice(): void {
+    const price = (this.botTargetEnabled && this.botTargetPrice > 0)
+      ? this.botTargetPrice
+      : null;
+    this.botSimulationService.setTargetPriceAll(price, this.environmentId || undefined);
+    this.retailSimulationService.setTargetPriceAll(price, this.environmentId || undefined);
+  }
+
+  /**
+   * Start the market
+   */
+  startMarket(): void {
+    this.isRunning = true;
+    this.isPaused = false;
+  }
+
+  /**
+   * Pause the market
+   */
+  pauseMarket(): void {
+    this.isPaused = true;
+  }
+
+  /**
+   * Stop the market
+   */
+  stopMarket(): void {
+    this.isRunning = false;
+    this.isPaused = false;
+  }
+
+  /**
+   * Select previous stock
+   */
+  selectPrevStock(): void {
+    if (this.environmentStocks.length <= 1) return;
+    const currentIndex = this.environmentStocks.findIndex((s) => s.id === this.selectedStockId);
+    const prevIndex = currentIndex > 0 ? currentIndex - 1 : this.environmentStocks.length - 1;
+    this.selectStock(this.environmentStocks[prevIndex]);
+  }
+
+  /**
+   * Select next stock
+   */
+  selectNextStock(): void {
+    if (this.environmentStocks.length <= 1) return;
+    const currentIndex = this.environmentStocks.findIndex((s) => s.id === this.selectedStockId);
+    const nextIndex = currentIndex < this.environmentStocks.length - 1 ? currentIndex + 1 : 0;
+    this.selectStock(this.environmentStocks[nextIndex]);
+  }
+
+  /**
+   * Handle stock selection change from dropdown
+   */
+  onStockSelectChange(): void {
+    const stock = this.environmentStocks.find((s) => s.id === this.selectedStockId);
+    if (stock) {
+      this.selectStock(stock);
+    }
+  }
+
+  /**
+   * Navigate back
+   */
+  goBack(): void {
+    if (this.activeTab === 'graph' && this.priceChart) {
+      this.priceChart.destroy();
+      this.priceChart = null;
+    }
+    this.router.navigate(['/']);
+  }
+
+  /**
+   * Set active tab
+   */
+  setActiveTab(tab: 'orderbook' | 'history' | 'myorders' | 'graph'): void {
+    if (this.activeTab === 'graph' && tab !== 'graph') {
+      if (this.priceChart) {
+        this.priceChart.destroy();
+        this.priceChart = null;
+      }
+    }
+    this.activeTab = tab;
+
+    if (tab === 'graph') {
+      setTimeout(() => this.makePriceChart(), 0);
+    }
+  }
+
+  /**
+   * Format currency
+   */
+  formatCurrency(value: number): string {
+    return '$' + value.toFixed(2);
+  }
+
+  /**
+   * Get open orders count
+   */
+  getOpenOrdersCount(): number {
+    return this.myOrders.filter((o) => o.status === 'open' || o.status === 'partial').length;
+  }
+
+  /**
+   * Click on order book price to set order price
+   */
+  setOrderPriceFromBook(price: number): void {
+    this.orderPrice = price;
+  }
+
+  /**
+   * Format time
+   */
+  formatTime(timestamp: string): string {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString();
+  }
+
+  /**
+   * Handle time range change
+   */
+  onTimeRangeChange(): void {
+    this.showCustomDatePicker = this.chartTimeRange === 'custom';
+    if (this.chartTimeRange !== 'custom') {
+      this.makePriceChart();
+    }
+  }
+
+  /**
+   * Apply custom date range
+   */
+  applyCustomDateRange(): void {
+    if (this.customStartDate && this.customEndDate) {
+      this.makePriceChart();
+    }
+  }
+
+  /**
+   * Get the start time based on selected range
+   */
+  private getTimeRangeStart(): Date | null {
+    const now = new Date();
+    
+    switch (this.chartTimeRange) {
+      case '5m':
+        return new Date(now.getTime() - 5 * 60 * 1000);
+      case '15m':
+        return new Date(now.getTime() - 15 * 60 * 1000);
+      case '30m':
+        return new Date(now.getTime() - 30 * 60 * 1000);
+      case '1h':
+        return new Date(now.getTime() - 60 * 60 * 1000);
+      case '4h':
+        return new Date(now.getTime() - 4 * 60 * 60 * 1000);
+      case '1d':
+        return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      case 'custom':
+        return this.customStartDate ? new Date(this.customStartDate) : null;
+      case 'all':
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Get the end time for custom range
+   */
+  private getTimeRangeEnd(): Date | null {
+    if (this.chartTimeRange === 'custom' && this.customEndDate) {
+      return new Date(this.customEndDate);
+    }
+    return null;
+  }
+
+  private makePriceChart(): void {
+    const canvas = document.getElementById('priceChart') as HTMLCanvasElement;
+    if (!canvas) return;
+
+    const startTime = this.getTimeRangeStart();
+    const endTime = this.getTimeRangeEnd();
+
+    const allTimestampsSet = new Set<number>();
+
+    for (const stock of this.environmentStocks) {
+      let trades = this.stockTradeMap[stock.id] || [];
+
+      for (const t of trades) {
+        const ts = new Date(t.created_at).getTime();
+
+        if (
+          (!startTime || ts >= startTime.getTime()) &&
+          (!endTime || ts <= endTime.getTime())
+        ) {
+          allTimestampsSet.add(ts);
+        }
+      }
+    }
+
+    const allTimestamps = Array.from(allTimestampsSet).sort((a, b) => a - b);
+
+    const labels = allTimestamps.map(ts => {
+      const date = new Date(ts);
+
+      if (
+        this.chartTimeRange === '1d' ||
+        this.chartTimeRange === 'custom' ||
+        this.chartTimeRange === 'all'
+      ) {
+        return date.toLocaleString([], {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+      }
+
+      return date.toLocaleTimeString();
+    });
+
+    const datasets = this.environmentStocks.map((stock, index) => {
+      let trades = this.stockTradeMap[stock.id] || [];
+
+      if (startTime) {
+        trades = trades.filter(t => new Date(t.created_at) >= startTime);
+      }
+      if (endTime) {
+        trades = trades.filter(t => new Date(t.created_at) <= endTime);
+      }
+
+      trades = trades.sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+
+      const priceMap = new Map<number, number>();
+      for (const t of trades) {
+        const ts = new Date(t.created_at).getTime();
+        priceMap.set(ts, Number(t.price));
+      }
+
+      let lastPrice: number | null = null;
+
+      const filledData = allTimestamps.map(ts => {
+        if (priceMap.has(ts)) {
+          lastPrice = priceMap.get(ts)!;
+          return lastPrice;
+        }
+
+        return lastPrice;
+      });
+
+      return {
+        label: stock.symbol,
+        data: filledData,
+        borderColor: this.getColor(index),
+        backgroundColor: this.getColor(index, 0.1),
+        tension: 0.25,
+        pointRadius: 0,
+        spanGaps: true,
+        hidden: this.visibleSymbols.size
+          ? !this.visibleSymbols.has(stock.id)
+          : false,
+      };
+    });
+
+    if (!this.priceChart) {
+      this.priceChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets,
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: {
+            legend: {
+              display: true,
+            },
+          },
+        },
+      });
+
+      return;
+    }
+
+    this.priceChart.data.labels = labels;
+    this.priceChart.data.datasets = datasets;
+    this.priceChart.update('none');
+  }
+
+  getColor(index: number, alpha = 1): string {
+    const colors = [
+      '37, 99, 235',   // blue
+      '220, 38, 38',   // red
+      '16, 185, 129',  // green
+      '234, 179, 8',   // yellow
+      '168, 85, 247',  // purple
+    ];
+
+    const c = colors[index % colors.length];
+    return `rgba(${c}, ${alpha})`;
+  }
+
+  toggleHelpMode(): void {
+    this.helpMode = !this.helpMode;
+    this.activeTooltip = null;
+  }
+
+  showHelp(event: MouseEvent, text: string): void {
+    if (!this.helpMode) return; 
+    const tooltipWidth = 250;
+    const tooltipHeight = 100;
+    const padding = 10;
+
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    // Horizontal position
+    let x = event.clientX + padding;
+    let position: 'left' | 'right' = 'right';
+    if (event.clientX + tooltipWidth + padding > viewportWidth) {
+      x = event.clientX - tooltipWidth - padding;
+      position = 'left';
+    }
+
+    // Vertical position
+    let y = event.clientY + padding;
+    if (event.clientY + tooltipHeight + padding > viewportHeight) {
+      y = Math.max(padding, event.clientY - tooltipHeight - padding);
+    }
+
+    this.activeTooltip = { text, x, y, position };
+  }
+
+  closeTooltip(): void {
+    this.activeTooltip = null;
+  }
+}

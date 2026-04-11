@@ -1,0 +1,75 @@
+<div class="dashboard-container">
+  
+  <h1>Dashboard</h1>
+  <h3>Displaying Information for :</h3>
+
+  <!-- Session Info -->
+  <div *ngIf="marketplace || sessionID" class="session-info">
+    <div *ngIf="marketplace" class="info-item">
+      <strong>Marketplace:</strong> {{ marketplace }}
+    </div>
+    <div *ngIf="sessionID" class="info-item">
+      <strong>Session ID:</strong> {{ sessionID }}
+    </div>
+  </div>
+
+  <!-- Session Selector Dropdown -->
+  <div *ngIf="marketplace && sessionID" class="session-selector">
+    <label class="form-label">Switch to Another Session:</label>
+    <div *ngIf="isLoadingSessions" class="loading-text">
+      Loading sessions...
+    </div>
+    <div *ngIf="sessionsError" class="error-text">
+      {{ sessionsError }}
+    </div>
+    <select
+      class="form-select"
+      [(ngModel)]="selectedSession"
+      (change)="onSessionChange()"
+      [disabled]="isLoadingSessions || sessions.length === 0">
+      <option [value]="sessionID">
+        {{ sessionID }} (current)
+      </option>
+      <option 
+        *ngFor="let s of sessions" 
+        [value]="s.id"
+        [disabled]="s.id === sessionID">
+        {{ s.id }}
+      </option>
+    </select>
+  </div>
+
+  <!-- No trades message -->
+  <div *ngIf="message" class="no-trades-message">
+    <div class="message-icon">i</div>
+    <h2>{{ message }}</h2>
+    <p>This session did not generate any trade records. Please select a different session or marketplace to view trade data.</p>
+  </div>
+
+  <div *ngIf="orders">
+    <h2>Orders for Selected Session</h2>
+    <pre style="max-width:100%;overflow:auto;background:#f3f3f3;padding:1em;border-radius:8px;">
+      {{ orders | json }}
+    </pre>
+  </div>
+
+  <!-- Trade Price Chart (Figma-style card) -->
+  <div *ngIf="showChart && chartConfig" class="chart-card">
+    <h2>Trade Price Analysis</h2>
+    <div class="chart-container">
+      <canvas 
+        baseChart
+        [type]="'line'"
+        [data]="chartConfig.data"
+        [options]="chartConfig.options">
+      </canvas>
+    </div>
+  </div>
+  <button class="back-button mb-6" (click)="goBack()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 0.5rem;">
+        <path d="m12 19-7-7 7-7"/>
+        <path d="M19 12H5"/>
+      </svg>
+      Back
+    </button>
+</div>

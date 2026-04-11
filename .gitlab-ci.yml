@@ -1,0 +1,30 @@
+image: node:18
+
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  cache:
+    paths:
+      - marketflow-angular/node_modules/
+  script:
+    - cd marketflow-angular
+    - npm ci
+    - npm run build -- --configuration production --base-href "/$CI_PROJECT_NAME/"
+  artifacts:
+    paths:
+      - marketflow-angular/dist/
+
+pages:
+  stage: deploy
+  script:
+    - mkdir -p public
+    - cp -r marketflow-angular/dist/marketflow-angular/browser/* public/
+    - cp public/index.html public/404.html
+  artifacts:
+    paths:
+      - public
+  only:
+    - Development
