@@ -1,0 +1,1252 @@
+<div class="trading-container">
+  <!-- Login Screen -->
+  <div *ngIf="currentView === 'login' && !isLoading" class="login-screen">
+    <button class="back-to-home-btn" (click)="goBack()" title="Back to Home">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m15 18-6-6 6-6"/>
+      </svg>
+      Back to Home
+    </button>
+    <div class="login-card">
+      <div class="login-header">
+        <h1>MarketFlow Trading</h1>
+        <p>Enter your trader name to join the market</p>
+      </div>
+      
+      <div class="login-form">
+        <div class="input-group login-input-group">
+          <label class="input-label">TRADER NAME</label>
+          <input 
+            type="text" 
+            class="login-text-input"
+            [(ngModel)]="usernameInput"
+            (keyup.enter)="loginAsTrader(usernameInput)"
+            placeholder="Enter your name..."
+            [disabled]="isLoggingIn">
+        </div>
+        
+        <div *ngIf="connectionError" class="login-error">
+          {{ connectionError }}
+        </div>
+        
+        <button 
+          class="login-btn"
+          (click)="loginAsTrader(usernameInput)"
+          [disabled]="isLoggingIn || !usernameInput.trim()">
+          <span *ngIf="!isLoggingIn">Continue</span>
+          <span *ngIf="isLoggingIn">Connecting...</span>
+        </button>
+      </div>
+      
+      <div class="login-footer">
+        <p>Real-time multi-user trading simulator</p>
+        <p class="login-note">Your balance and trades are saved automatically</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Environment Selection Screen -->
+  <div *ngIf="currentView === 'environment-select'" class="environment-select-screen">
+    <button class="back-to-home-btn" (click)="logout()" title="Back to Login">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m15 18-6-6 6-6"/>
+      </svg>
+      Logout
+    </button>
+    
+    <div class="environment-select-card">
+      <div class="welcome-header">
+        <h1>Welcome, {{ traderUsername }}!</h1>
+        <p>Choose to create a new trading environment or join an existing one</p>
+      </div>
+      
+      <div class="environment-actions">
+        <button class="action-btn create-btn" (click)="showCreateEnvironment()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>
+          </svg>
+          <span class="action-title">Create Environment</span>
+          <span class="action-desc">Set up a new trading environment with custom stocks and rules</span>
+        </button>
+        
+        <button class="action-btn join-btn" (click)="showJoinEnvironment()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <span class="action-title">Join Environment</span>
+          <span class="action-desc">Join an existing public or private environment</span>
+        </button>
+      </div>
+      
+      <!-- My Environments -->
+      <div *ngIf="myEnvironments.length > 0" class="environment-section">
+        <h3>Your Environments</h3>
+        <div class="environment-list">
+          <div 
+            class="environment-item" 
+            *ngFor="let env of myEnvironments"
+            (click)="joinEnvironmentById(env.id)">
+            <div class="env-info">
+              <span class="env-name">{{ env.name }}</span>
+              <span class="env-desc">{{ env.description || 'No description' }}</span>
+            </div>
+            <div class="env-meta">
+              <span class="env-status" [class.paused]="env.is_paused">
+                {{ env.is_paused ? '⏸ Paused' : '● Active' }}
+              </span>
+              <span *ngIf="env.is_private" class="env-private">🔒 Private</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Public Environments -->
+      <div *ngIf="publicEnvironments.length > 0" class="environment-section">
+        <h3>Public Environments</h3>
+        <div class="environment-list">
+          <div 
+            class="environment-item" 
+            *ngFor="let env of publicEnvironments"
+            (click)="joinEnvironmentById(env.id)">
+            <div class="env-info">
+              <span class="env-name">{{ env.name }}</span>
+              <span class="env-desc">{{ env.description || 'No description' }}</span>
+              <span class="env-creator">Created by {{ env.creator?.username || 'Unknown' }}</span>
+            </div>
+            <div class="env-meta">
+              <span class="env-participants">👥 {{ env.participant_count || 0 }} traders</span>
+              <span class="env-status" [class.paused]="env.is_paused">
+                {{ env.is_paused ? '⏸ Paused' : '● Active' }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Environment Screen -->
+  <div *ngIf="currentView === 'create-environment'" class="create-environment-screen">
+    <button class="back-to-home-btn" (click)="backToEnvironmentSelect()" title="Back">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m15 18-6-6 6-6"/>
+      </svg>
+      Back
+    </button>
+    
+    <div class="create-environment-card">
+      <h1>Create Trading Environment</h1>
+      
+      <div class="form-section">
+        <h3>Basic Information</h3>
+        
+        <div class="form-row">
+          <label>Environment Name *</label>
+          <input type="text" [(ngModel)]="newEnvironment.name" placeholder="My Trading Environment">
+        </div>
+        
+        <div class="form-row">
+          <label>Description</label>
+          <textarea [(ngModel)]="newEnvironment.description" placeholder="Describe your environment..." rows="3"></textarea>
+        </div>
+        
+        <!-- Import Settings -->
+        <div class="form-row" *ngIf="availableImportEnvironments.length > 0">
+          <label>Import Settings From</label>
+          <select [(ngModel)]="importFromEnvironmentId" (change)="importSettings()">
+            <option value="">-- Don't import --</option>
+            <option *ngFor="let env of availableImportEnvironments" [value]="env.id">
+              {{ env.name }}
+            </option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="form-section">
+        <h3>Trading Settings</h3>
+        
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Starting Cash ($)</label>
+            <input type="number" [(ngModel)]="newEnvironment.starting_cash" min="0" step="100">
+          </div>
+          
+          <div class="form-row">
+            <label>Starting Shares (per stock)</label>
+            <input type="number" [(ngModel)]="newEnvironment.starting_shares" min="0" step="10">
+          </div>
+          
+          <div class="form-row">
+            <label>Min Price Change ($)</label>
+            <input type="number" [(ngModel)]="newEnvironment.min_price_change" min="0.01" step="0.01">
+          </div>
+        </div>
+        
+        <div class="form-row checkbox-row">
+          <label class="checkbox-label">
+            <input type="checkbox" [(ngModel)]="newEnvironment.allow_shorting">
+            <span>Allow Short Selling</span>
+          </label>
+        </div>
+        
+        <div class="form-row" *ngIf="newEnvironment.allow_shorting">
+          <label>Max Short Units (per stock)</label>
+          <input type="number" [(ngModel)]="newEnvironment.max_short_units" min="0" step="10">
+        </div>
+      </div>
+      
+      <div class="form-section">
+        <h3>Privacy Settings</h3>
+        
+        <div class="form-row checkbox-row">
+          <label class="checkbox-label">
+            <input type="checkbox" [(ngModel)]="newEnvironment.is_private">
+            <span>Private Environment (password protected)</span>
+          </label>
+        </div>
+        
+        <div class="form-row" *ngIf="newEnvironment.is_private">
+          <label>Password</label>
+          <input type="password" [(ngModel)]="newEnvironment.password" placeholder="Enter password for joining">
+        </div>
+      </div>
+      
+      <div class="form-section">
+        <div class="section-header">
+          <h3>Stocks</h3>
+          <button class="add-stock-btn" (click)="addStock()">+ Add Stock</button>
+        </div>
+        
+        <div class="stocks-list">
+          <div class="stock-form" *ngFor="let stock of newStocks; let i = index">
+            <div class="stock-header">
+              <span>Stock #{{ i + 1 }}</span>
+              <button *ngIf="newStocks.length > 1" class="remove-stock-btn" (click)="removeStock(i)">×</button>
+            </div>
+            
+            <div class="stock-grid">
+              <div class="form-row">
+                <label>Symbol *</label>
+                <input type="text" [(ngModel)]="stock.symbol" placeholder="AAPL" maxlength="10">
+              </div>
+              
+              <div class="form-row">
+                <label>Name</label>
+                <input type="text" [(ngModel)]="stock.name" placeholder="Apple Inc.">
+              </div>
+              
+              <div class="form-row">
+                <label>Starting Price ($)</label>
+                <input type="number" [(ngModel)]="stock.startingPrice" min="0.01" step="0.01">
+              </div>
+              
+              <div class="form-row">
+                <label>Min Price Change ($)</label>
+                <input type="number" [(ngModel)]="stock.minPriceChange" min="0.01" step="0.01">
+              </div>
+            </div>
+            
+            <div class="form-row">
+              <label>Description</label>
+              <input type="text" [(ngModel)]="stock.description" placeholder="Optional stock description">
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div *ngIf="connectionError" class="login-error">
+        {{ connectionError }}
+      </div>
+      
+      <div class="form-actions">
+        <button class="cancel-btn" (click)="backToEnvironmentSelect()">Cancel</button>
+        <button class="submit-btn" (click)="createEnvironment()" [disabled]="isLoading">
+          {{ isLoading ? 'Creating...' : 'Create Environment' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Join Environment Screen -->
+  <div *ngIf="currentView === 'join-environment'" class="join-environment-screen">
+    <button class="back-to-home-btn" (click)="backToEnvironmentSelect()" title="Back">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m15 18-6-6 6-6"/>
+      </svg>
+      Back
+    </button>
+    
+    <div class="join-environment-card">
+      <h1>Join Trading Environment</h1>
+      
+      <!-- Search/Lookup Section -->
+      <div *ngIf="!selectedEnvironmentToJoin" class="join-search-section">
+        <div class="search-tabs">
+          <div class="search-option">
+            <h3>Search by Name</h3>
+            <div class="search-input-group">
+              <input 
+                type="text" 
+                [(ngModel)]="environmentSearchTerm" 
+                placeholder="Search environments..."
+                (keyup.enter)="searchEnvironments()"
+                (input)="searchEnvironments()">
+              <button class="search-btn" (click)="searchEnvironments()" [disabled]="isSearching">
+                {{ isSearching ? '...' : '🔍' }}
+              </button>
+            </div>
+          </div>
+          
+          <div class="search-divider">or</div>
+          
+          <div class="search-option">
+            <h3>Join by Environment ID</h3>
+            <div class="search-input-group">
+              <input 
+                type="text" 
+                [(ngModel)]="joinEnvironmentId" 
+                placeholder="Paste environment ID..."
+                (keyup.enter)="lookupEnvironmentById()">
+              <button class="search-btn" (click)="lookupEnvironmentById()" [disabled]="isSearching">
+                {{ isSearching ? '...' : 'Find' }}
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Search Results -->
+        <div *ngIf="searchResults.length > 0" class="search-results">
+          <h3>Search Results</h3>
+          <div class="search-results-list">
+            <div 
+              class="search-result-item" 
+              *ngFor="let env of searchResults"
+              (click)="selectEnvironmentFromSearch(env)">
+              <div class="result-info">
+                <span class="result-name">{{ env.name }}</span>
+                <span class="result-desc">{{ env.description || 'No description' }}</span>
+                <span class="result-creator" *ngIf="env.creator">by {{ env.creator.username }}</span>
+              </div>
+              <div class="result-badges">
+                <span *ngIf="env.is_private" class="badge-private">🔒 Private</span>
+                <span *ngIf="!env.is_private" class="badge-public">🌐 Public</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div *ngIf="connectionError" class="login-error">
+          {{ connectionError }}
+        </div>
+      </div>
+      
+      <!-- Selected Environment Info -->
+      <div *ngIf="selectedEnvironmentToJoin" class="selected-env-info">
+        <button class="change-selection-btn" (click)="selectedEnvironmentToJoin = null; connectionError = null;">
+          ← Select Different Environment
+        </button>
+        
+        <div class="selected-env-card">
+          <h3>{{ selectedEnvironmentToJoin.name }}</h3>
+          <p class="env-description">{{ selectedEnvironmentToJoin.description || 'No description' }}</p>
+          
+          <div class="env-badges">
+            <span *ngIf="selectedEnvironmentToJoin.is_private" class="badge-private">🔒 Private Environment</span>
+            <span *ngIf="!selectedEnvironmentToJoin.is_private" class="badge-public">🌐 Public Environment</span>
+            <span *ngIf="selectedEnvironmentToJoin.creator" class="badge-creator">Created by {{ selectedEnvironmentToJoin.creator.username }}</span>
+          </div>
+          
+          <div *ngIf="selectedEnvironmentToJoin.is_private" class="password-section">
+            <label>🔑 Password Required</label>
+            <input 
+              type="password" 
+              [(ngModel)]="joinPassword" 
+              placeholder="Enter environment password"
+              (keyup.enter)="joinSelectedEnvironment()">
+            <p class="password-hint">This environment is password protected. Enter the password provided by the creator.</p>
+          </div>
+          
+          <div *ngIf="connectionError" class="login-error">
+            {{ connectionError }}
+          </div>
+          
+          <button 
+            class="submit-btn" 
+            (click)="joinSelectedEnvironment()" 
+            [disabled]="isLoading || (selectedEnvironmentToJoin.is_private && !joinPassword)">
+            {{ isLoading ? 'Joining...' : 'Join Environment' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Screen -->
+  <div *ngIf="isLoading" class="loading-screen">
+    <div class="loading-spinner"></div>
+    <p>Connecting to market...</p>
+  </div>
+
+  <!-- Main Trading Interface -->
+  <ng-container *ngIf="currentView === 'trading' && isConnected">
+    <!-- Header Bar -->
+    <header class="trading-header">
+      <div class="header-left">
+        <button class="close-btn" (click)="leaveEnvironment()">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m15 18-6-6 6-6"/>
+          </svg>
+        </button>
+        <div class="market-info">
+          <span class="market-label">{{ currentEnvironment?.name || 'MARKETFLOW' }}</span>
+          <span class="market-id">{{ symbol }}</span>
+        </div>
+      </div>
+      
+      <div class="header-center">
+        <div class="trader-badge"
+            (mouseenter)="showHelp($event, 'This is you.')"
+            (mouseleave)="closeTooltip()">
+          <span class="trader-icon">👤</span>
+          <span class="trader-name">{{ traderUsername }}</span>
+        </div>
+        
+        <!-- Stock Selector -->
+        <div id="wt-stock-selector" class="stock-selector" *ngIf="environmentStocks.length > 1"
+            (mouseenter)="showHelp($event, 'You can use this to change the current stock.')"
+            (mouseleave)="closeTooltip()">
+          <select [(ngModel)]="selectedStockId" (change)="onStockSelectChange()">
+            <option *ngFor="let stock of environmentStocks" [value]="stock.id">
+              {{ stock.symbol }} - {{ stock.name || stock.symbol }}
+            </option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="header-right">
+        <!-- Pause Button (Admin Only) -->
+        <button *ngIf="isAdmin" class="pause-btn" 
+                (mouseenter)="showHelp($event, 'Press this button to pause and unpause the trading simulation.')"
+                (mouseleave)="closeTooltip()"
+                [class.paused]="isPaused" (click)="togglePause()">
+          <svg *ngIf="!isPaused" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+          </svg>
+          <svg *ngIf="isPaused" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          {{ isPaused ? 'Resume' : 'Pause' }}
+        </button>
+
+        <!-- Broadcast Message Button (Admin Only) -->
+        <button *ngIf="isAdmin" class="broadcast-btn" (click)="toggleMessageComposer()" title="Send Message to Participants">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m3 11 18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>
+          </svg>
+          Broadcast
+        </button>
+
+        <!-- Message History Button (All Users) -->
+        <button class="messages-btn" (click)="toggleMessageHistory()" title="View Messages" [class.has-unread]="getUnreadMessageCount() > 0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span *ngIf="getUnreadMessageCount() > 0" class="msg-badge">{{ getUnreadMessageCount() }}</span>
+        </button>
+        
+        <button class="logout-btn" (click)="leaveEnvironment()" title="Leave Environment">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+          Leave
+        </button>
+      </div>
+    </header>
+    
+    <!-- Paused Banner -->
+    <div *ngIf="isPaused" class="paused-banner">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+      </svg>
+      <span>Trading is currently paused{{ currentEnvironment?.pause_reason ? ': ' + currentEnvironment?.pause_reason : '' }}</span>
+    </div>
+
+    <!-- Admin Message Banner (Latest) -->
+    <div *ngIf="showMessageBanner && latestMessage" class="admin-message-banner" [ngClass]="'msg-type-' + latestMessage.message_type">
+      <div class="msg-banner-icon">
+        <svg *ngIf="latestMessage.message_type === 'info'" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        <svg *ngIf="latestMessage.message_type === 'warning'" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        <svg *ngIf="latestMessage.message_type === 'alert'" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      </div>
+      <div class="msg-banner-content">
+        <span class="msg-banner-sender">{{ latestMessage.sender_name }}</span>
+        <span class="msg-banner-text">{{ latestMessage.message }}</span>
+        <span class="msg-banner-time">{{ formatMessageTime(latestMessage.created_at) }}</span>
+      </div>
+      <button class="msg-banner-dismiss" (click)="dismissMessageBanner()" title="Dismiss">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Message Composer (Admin Only) -->
+    <div *ngIf="showMessageComposer && isAdmin" class="message-composer-overlay">
+      <div class="message-composer">
+        <div class="composer-header">
+          <h3>Broadcast Message</h3>
+          <button class="composer-close" (click)="toggleMessageComposer()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="composer-body">
+          <div class="composer-type-selector">
+            <label class="type-option" [class.selected]="adminMessageType === 'info'">
+              <input type="radio" name="msgType" value="info" [(ngModel)]="adminMessageType">
+              <span class="type-dot info-dot"></span> Info
+            </label>
+            <label class="type-option" [class.selected]="adminMessageType === 'warning'">
+              <input type="radio" name="msgType" value="warning" [(ngModel)]="adminMessageType">
+              <span class="type-dot warning-dot"></span> Warning
+            </label>
+            <label class="type-option" [class.selected]="adminMessageType === 'alert'">
+              <input type="radio" name="msgType" value="alert" [(ngModel)]="adminMessageType">
+              <span class="type-dot alert-dot"></span> Alert
+            </label>
+          </div>
+          <textarea
+            class="composer-textarea"
+            [(ngModel)]="newAdminMessage"
+            placeholder="Type your message to all participants..."
+            rows="3"
+            maxlength="500"
+            (keydown.control.enter)="sendAdminMessage()"
+          ></textarea>
+          <div class="composer-footer">
+            <span class="char-count">{{ newAdminMessage.length }}/500</span>
+            <button
+              class="composer-send-btn"
+              (click)="sendAdminMessage()"
+              [disabled]="isSendingMessage || !newAdminMessage.trim()">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              {{ isSendingMessage ? 'Sending...' : 'Send' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Message History Panel -->
+    <div *ngIf="showMessageHistory" class="message-history-overlay">
+      <div class="message-history">
+        <div class="history-header">
+          <h3>Admin Messages</h3>
+          <button class="composer-close" (click)="toggleMessageHistory()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="history-body">
+          <div *ngIf="adminMessages.length === 0" class="no-messages">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <p>No messages yet</p>
+          </div>
+          <div *ngFor="let msg of adminMessages" class="history-message" [ngClass]="'msg-type-' + msg.message_type">
+            <div class="history-msg-header">
+              <span class="history-msg-type-badge" [ngClass]="'badge-' + msg.message_type">{{ msg.message_type | uppercase }}</span>
+              <span class="history-msg-sender">{{ msg.sender_name }}</span>
+              <span class="history-msg-time">{{ formatMessageTime(msg.created_at) }}</span>
+            </div>
+            <p class="history-msg-text">{{ msg.message }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <div class="trading-main">
+    <!-- Left Panel - Account & Order Entry -->
+    <aside class="left-panel">
+      <!-- Account Summary -->
+      <div
+      id="wt-account"
+      class="account-summary"
+      (mouseenter)="showHelp($event, 'This shows your cash balances')"
+      (mouseleave)="closeTooltip()"
+      >
+        <div class="account-row">
+          <span class="account-label">CASH</span>
+          <div class="account-values">
+            <span class="value-header">SETTLED</span>
+            <span class="value-header">AVAILABLE</span>
+          </div>
+        </div>
+        <div class="account-row">
+          <span></span>
+          <div class="account-values">
+            <span class="value cash-value">{{ formatCurrency(settledCash) }}</span>
+            <span class="value cash-value">{{ formatCurrency(availableCash) }}</span>
+          </div>
+        </div>
+        <div class="account-row">
+          <span class="account-label symbol-label">{{ symbol }}</span>
+          <div class="account-values">
+            <span class="value">{{ positionUnits }}</span>
+            <span class="value position-indicator">{{ positionUnits }}<span class="arrow">‹</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Order Entry -->
+      <div
+      id="wt-order-entry"
+      class="order-entry">
+        <div 
+        class="symbol-display"
+        (mouseenter)="showHelp($event, 'The stock you are currently trading.')"
+        (mouseleave)="closeTooltip()"
+        >{{ symbol }}</div>
+        
+        <!-- Buy/Sell Toggle -->
+        <div class="order-type-toggle">
+          <button 
+            class="type-btn buy-btn" 
+            (mouseenter)="showHelp($event, 'Click me to change to buying stocks.')"
+            (mouseleave)="closeTooltip()"
+            [class.active]="orderType === 'buy'"
+            (click)="setOrderType('buy')">
+            BUY
+          </button>
+          <button 
+            class="type-btn sell-btn"
+            (mouseenter)="showHelp($event, 'Click me to change to selling stocks.')"
+            (mouseleave)="closeTooltip()" 
+            [class.active]="orderType === 'sell'"
+            (click)="setOrderType('sell')">
+            SELL
+          </button>
+        </div>
+
+        <!-- Units Input -->
+        <div class="input-group"
+        (mouseenter)="showHelp($event, 'You can change the number of stocks you want to buy or sell here.')"
+        (mouseleave)="closeTooltip()"
+        >
+          <label class="input-label">UNITS</label>
+          <div class="slider-container">
+            <input 
+              type="range" 
+              class="slider" 
+              [min]="1" 
+              [max]="maxUnits" 
+              [(ngModel)]="orderUnits">
+          </div>
+          <div class="input-with-controls">
+            <input 
+              type="number" 
+              class="number-input" 
+              [(ngModel)]="orderUnits" 
+              [min]="1" 
+              [max]="maxUnits">
+            <div class="input-controls">
+              <button class="control-mini" (click)="decrementUnits()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+              </button>
+              <button class="control-mini" (click)="incrementUnits()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Price Input -->
+        <div class="input-group"
+        (mouseenter)="showHelp($event, 'You can change the price that you want to buy or sell at here.')"
+        (mouseleave)="closeTooltip()"
+        >
+          <label class="input-label">PRICE</label>
+          <div class="slider-container">
+            <input 
+              type="range" 
+              class="slider" 
+              [min]="0" 
+              [max]="maxPrice" 
+              step="0.5"
+              [(ngModel)]="orderPrice">
+          </div>
+          <div class="input-with-controls">
+            <p>$</p>
+            <input 
+              type="number" 
+              class="number-input" 
+              [(ngModel)]="orderPrice" 
+              [min]="1.00" 
+              [max]="1000">
+            <div class="input-controls">
+              <button class="control-mini" (click)="decrementPrice()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+              </button>
+              <button class="control-mini" (click)="incrementPrice()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Place Order Button -->
+        <button
+          class="place-order-btn"
+          (mouseenter)="showHelp($event, 'Click me to place your buy or sell orders.')"
+          (mouseleave)="closeTooltip()"
+          [class.buy]="orderType === 'buy'"
+          [class.sell]="orderType === 'sell'"
+          [class.disabled-paused]="isPaused"
+          (click)="placeOrder()"
+          [disabled]="orderUnits <= 0 || orderPrice <= 0 || isPlacingOrder || isPaused">
+          <span *ngIf="!isPlacingOrder && !isPaused">PLACE {{ orderType === 'buy' ? 'BUY' : 'SELL' }} ORDER</span>
+          <span *ngIf="isPlacingOrder">PLACING ORDER...</span>
+          <span *ngIf="isPaused && !isPlacingOrder">TRADING PAUSED</span>
+        </button>
+      </div>
+
+      <!-- Bot Controls (Admin Only) -->
+      <div *ngIf="isAdmin" class="bot-controls-section" id="wt-bot-controls">
+        <div class="bot-controls-header">BOT SIMULATION</div>
+
+        <!-- Market-Maker Bots -->
+        <div class="bot-subsection">
+          <label class="bot-subsection-label">MARKET MAKER</label>
+          <div class="bot-row">
+            <select [(ngModel)]="mmBotTargetStockId" class="bot-stock-select">
+              <option *ngFor="let s of environmentStocks" [value]="s.id">{{ s.symbol }}</option>
+            </select>
+            <select [(ngModel)]="mmBotVolatility"
+                    (ngModelChange)="onMmVolatilityChange()"
+                    class="bot-vol-select">
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+              <option value="extreme">Extreme</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+
+          <!-- Custom volatility parameters -->
+          <div *ngIf="showMmCustomParams" class="mm-custom-panel">
+            <div class="mm-param-row">
+              <label class="mm-param-label">Tick σ</label>
+              <input type="range" class="mm-param-slider"
+                     [(ngModel)]="mmCustomProfile.tickSigma"
+                     min="0.001" max="0.5" step="0.001">
+              <input type="number" class="mm-param-input"
+                     [(ngModel)]="mmCustomProfile.tickSigma"
+                     min="0.001" max="0.5" step="0.001">
+            </div>
+            <div class="mm-param-row">
+              <label class="mm-param-label">½ Spread</label>
+              <input type="range" class="mm-param-slider"
+                     [(ngModel)]="mmCustomProfile.baseHalfSpread"
+                     min="0.01" max="1.0" step="0.01">
+              <input type="number" class="mm-param-input"
+                     [(ngModel)]="mmCustomProfile.baseHalfSpread"
+                     min="0.01" max="1.0" step="0.01">
+            </div>
+            <div class="mm-param-row">
+              <label class="mm-param-label">Shock P</label>
+              <input type="range" class="mm-param-slider"
+                     [(ngModel)]="mmCustomProfile.shockProb"
+                     min="0" max="0.1" step="0.001">
+              <input type="number" class="mm-param-input"
+                     [(ngModel)]="mmCustomProfile.shockProb"
+                     min="0" max="0.1" step="0.001">
+            </div>
+            <div class="mm-param-row">
+              <label class="mm-param-label">Shock σ</label>
+              <input type="range" class="mm-param-slider"
+                     [(ngModel)]="mmCustomProfile.shockSigma"
+                     min="0.1" max="5.0" step="0.1">
+              <input type="number" class="mm-param-input"
+                     [(ngModel)]="mmCustomProfile.shockSigma"
+                     min="0.1" max="5.0" step="0.1">
+            </div>
+            <div class="mm-param-row">
+              <label class="mm-param-label">Inv Skew</label>
+              <input type="range" class="mm-param-slider"
+                     [(ngModel)]="mmCustomProfile.inventorySkewPerUnit"
+                     min="0.001" max="0.05" step="0.001">
+              <input type="number" class="mm-param-input"
+                     [(ngModel)]="mmCustomProfile.inventorySkewPerUnit"
+                     min="0.001" max="0.05" step="0.001">
+            </div>
+            <div class="mm-param-row">
+              <label class="mm-param-label">Jitter</label>
+              <input type="range" class="mm-param-slider"
+                     [(ngModel)]="mmCustomProfile.jitter"
+                     min="0.01" max="0.3" step="0.01">
+              <input type="number" class="mm-param-input"
+                     [(ngModel)]="mmCustomProfile.jitter"
+                     min="0.01" max="0.3" step="0.01">
+            </div>
+          </div>
+
+          <button class="bot-toggle-btn" [class.active]="activeMmSimStocks.has(mmBotTargetStockId)"
+                  (click)="toggleMmSimulation()">
+            {{ activeMmSimStocks.has(mmBotTargetStockId) ? 'STOP MARKET MAKER' : 'START MARKET MAKER' }}
+          </button>
+          <span *ngIf="activeMmSimStocks.size > 0" class="active-sims-badge">
+            {{ activeMmSimStocks.size }} stocks running
+          </span>
+        </div>
+
+        <!-- Retail Bots -->
+        <div class="bot-subsection">
+          <label class="bot-subsection-label">RETAIL INVESTORS</label>
+          <div class="bot-row">
+            <select [(ngModel)]="retailBotTargetStockId" class="bot-stock-select">
+              <option *ngFor="let s of environmentStocks" [value]="s.id">{{ s.symbol }}</option>
+            </select>
+            <select [(ngModel)]="retailAsymmetry" class="bot-vol-select">
+              <option value="low">Low Volatility</option>
+              <option value="medium">Medium Volatility</option>
+              <option value="high">High Volatility</option>
+            </select>
+          </div>
+          <button class="bot-toggle-btn" [class.active]="activeRetailSimStocks.has(retailBotTargetStockId)"
+                  (click)="toggleRetailSimulation()">
+            {{ activeRetailSimStocks.has(retailBotTargetStockId) ? 'STOP RETAIL' : 'START RETAIL' }}
+          </button>
+          <span *ngIf="activeRetailSimStocks.size > 0" class="active-sims-badge">
+            {{ activeRetailSimStocks.size }} stocks running
+          </span>
+        </div>
+
+        <!-- Shared Controls -->
+        <div class="bot-shared-controls">
+          <div class="bot-speed-row">
+            <label class="bot-speed-label">TICK SPEED</label>
+            <input type="range" class="bot-speed-slider"
+                   [(ngModel)]="botTickSpeedMs" min="200" max="1400" step="100">
+            <span class="bot-speed-value">{{ botTickSpeedMs }}ms</span>
+          </div>
+          <div class="bot-target-section">
+            <div class="bot-target-header">
+              <label class="bot-speed-label">TARGET PRICE</label>
+              <button class="bot-target-toggle"
+                      [class.active]="botTargetEnabled"
+                      (click)="toggleBotTarget()">
+                {{ botTargetEnabled ? 'ON' : 'OFF' }}
+              </button>
+            </div>
+            <div class="bot-target-input-row">
+              <input type="number" class="bot-price-input"
+                     [(ngModel)]="botTargetPrice" min="0.01" step="0.01"
+                     [disabled]="!botTargetEnabled"
+                     placeholder="e.g. 90">
+              <button class="bot-confirm-btn"
+                      [disabled]="!botTargetEnabled || botTargetPrice <= 0"
+                      (click)="syncBotTargetPrice()">
+                SET
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Center Panel - Order Book & Trade History -->
+    <main class="center-panel">
+      <!-- Symbol Header -->
+      <div 
+      class="symbol-header"
+      (mouseenter)="showHelp($event, 'The current stock, click the arrows to change to a different stock.')"
+      (mouseleave)="closeTooltip()"
+      >
+        <button class="nav-arrow" *ngIf="environmentStocks.length > 1" (click)="selectPrevStock()">‹</button>
+        <span class="symbol-title">{{ symbol }}{{ selectedStock?.name ? ' - ' + selectedStock?.name : '' }}</span>
+        <button class="nav-arrow" *ngIf="environmentStocks.length > 1" (click)="selectNextStock()">›</button>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div class="tab-nav">
+        <button 
+          class="tab-btn"
+          (mouseenter)="showHelp($event, 'Click me to go to the orderbook.')"
+          (mouseleave)="closeTooltip()" 
+          [class.active]="activeTab === 'orderbook'"
+          (click)="setActiveTab('orderbook')">
+          ORDER BOOK
+        </button>
+        <button 
+          class="tab-btn" 
+          (mouseenter)="showHelp($event, 'Click me to see the entire trade history of the current stock.')"
+          (mouseleave)="closeTooltip()"
+          [class.active]="activeTab === 'history'"
+          (click)="setActiveTab('history')">
+          TRADE HISTORY
+        </button>
+        <button 
+          class="tab-btn"
+          (mouseenter)="showHelp($event, 'Click me view all your orders, both filled and unfilled.')"
+          (mouseleave)="closeTooltip()" 
+          [class.active]="activeTab === 'myorders'"
+          (click)="setActiveTab('myorders')">
+          MY ORDERS
+          <span *ngIf="getOpenOrdersCount() > 0" class="order-count">{{ getOpenOrdersCount() }}</span>
+        </button>
+        <button 
+          class="tab-btn"
+          (mouseenter)="showHelp($event, 'Click me to see a bigger graph that you can change the time span being shown.')"
+          (mouseleave)="closeTooltip()" 
+          [class.active]="activeTab === 'graph'"
+          (click)="setActiveTab('graph')">
+          GRAPH
+        </button>
+      </div>
+
+      <!-- Order Book View -->
+      <div class="tab-content" *ngIf="activeTab === 'orderbook'">
+        <!-- Price Chart (built from trades) -->
+        <div 
+        class="live-chart-card"
+        (mouseenter)="showHelp($event, 'A live chart showing you the prices the current stock is being sold at.')"
+        (mouseleave)="closeTooltip()"
+        >
+          <div class="live-chart-title">
+            <span>PRICE</span>
+            <div class="live-chart-controls">
+              <span class="live-chart-last" *ngIf="lastPrice !== null">Last: {{ formatCurrency(lastPrice) }}</span>
+            </div>
+          </div>
+
+          <div class="live-chart-container">
+            <canvas
+              baseChart
+              [type]="'line'"
+              [data]="priceChartData"
+              [options]="priceChartOptions"
+            ></canvas>
+
+            <div class="chart-empty" *ngIf="trades.length === 0">
+              Waiting for trades...
+            </div>
+          </div>
+        </div>
+
+        <!-- Column Headers -->
+        <div class="book-header">
+          <span class="col-units">UNITS</span>
+          <span class="col-price">PRICE</span>
+          <span class="col-mine">MINE</span>
+        </div>
+
+        <div class="orderbook-scroll">
+
+        <!-- Asks (Sell Orders) - Displayed in reverse so lowest is at bottom -->
+        <div 
+        class="order-book asks"
+        (mouseenter)="showHelp($event, 'All the stocks that are currently being sold and the price to buy it.<br>The stocks that you are selling have an orange dot on the right.')"
+        (mouseleave)="closeTooltip()"
+        >
+          <div 
+            class="book-row ask"
+            *ngFor="let ask of asks.slice()"
+            (click)="setOrderPriceFromBook(ask.price)">
+            <span class="col-units">{{ ask.units }}</span>
+            <span class="col-price">{{ formatCurrency(ask.price) }}</span>
+            <span class="col-mine">
+              <span *ngIf="ask.isMine" class="mine-indicator">●</span>
+            </span>
+            <div class="depth-bar ask-bar" [style.width.%]="(ask.units / 20) * 100"></div>
+          </div>
+          <div *ngIf="asks.length === 0" class="empty-book">No sell orders</div>
+        </div>
+
+        <!-- Spread Indicator -->
+        <div class="spread-indicator" *ngIf="spread !== null">
+          <span class="spread-label">Spread</span>
+          <span class="spread-value">{{ formatCurrency(spread) }}</span>
+          <span class="last-price" *ngIf="lastPrice !== null">Last: {{ formatCurrency(lastPrice) }}</span>
+          <button
+            *ngIf="hasCross"
+            class="settle-btn"
+            [disabled]="isSettlingOrderBook || isMatchingSweepRunning"
+            (click)="settleOrderBook()"
+            title="Match all crossing orders now">
+            {{ isSettlingOrderBook ? 'Settling...' : 'Settle' }}
+          </button>
+        </div>
+
+        <!-- Bids (Buy Orders) -->
+        <div 
+        class="order-book bids"
+        (mouseenter)="showHelp($event, 'All orders for the stock that are currently open.<br>Your buy orders have an orange dot on the right.')"
+        (mouseleave)="closeTooltip()" 
+        >
+          <div 
+            class="book-row bid" 
+            *ngFor="let bid of bids"
+            (click)="setOrderPriceFromBook(bid.price)">
+            <span class="col-units">{{ bid.units }}</span>
+            <span class="col-price">{{ formatCurrency(bid.price) }}</span>
+            <span class="col-mine">
+              <span *ngIf="bid.isMine" class="mine-indicator">●</span>
+            </span>
+            <div class="depth-bar bid-bar" [style.width.%]="(bid.units / 20) * 100"></div>
+          </div>
+          <div *ngIf="bids.length === 0" class="empty-book">No buy orders</div>
+        </div>
+
+        </div>
+      </div>
+
+      <!-- Trade History View -->
+      <div class="tab-content" *ngIf="activeTab === 'history'">
+        <div class="trade-history"
+            (mouseenter)="showHelp($event, 'This shows you all of the trades that have happend with the current stock.<br>It tells you the time the trade occured, the price the trade happened at, and the number of stocks traded.')"
+            (mouseleave)="closeTooltip()">
+          <div class="history-header">
+            <span class="col-time">TIME</span>
+            <span class="col-price">PRICE</span>
+            <span class="col-units">UNITS</span>
+          </div>
+          <div class="history-list">
+            <div 
+              class="history-row" 
+              *ngFor="let trade of trades"
+              [class.my-trade]="trade.buyer_id === participantId || trade.seller_id === participantId">
+              <span class="col-time">{{ formatTime(trade.created_at) }}</span>
+              <span class="col-price">{{ formatCurrency(+trade.price) }}</span>
+              <span class="col-units">{{ trade.units }}</span>
+            </div>
+            <div *ngIf="trades.length === 0" class="empty-history">
+              No trades yet
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- My Orders View -->
+      <div class="tab-content" *ngIf="activeTab === 'myorders'">
+        <div class="my-orders"
+            (mouseenter)="showHelp($event, 'This area shows all the trades that you have made or that are still outstanding. You can click the cancel button to remove any outstanding trades.')"
+            (mouseleave)="closeTooltip()">
+          <div class="orders-header">
+            <span class="col-type">TYPE</span>
+            <span class="col-price">PRICE</span>
+            <span class="col-units">UNITS</span>
+            <span class="col-status">STATUS</span>
+            <span class="col-action">ACTION</span>
+          </div>
+          <div class="orders-list">
+            <div 
+              class="order-row" 
+              *ngFor="let order of myOrders"
+              [class.buy]="order.type === 'buy'"
+              [class.sell]="order.type === 'sell'">
+              <span class="col-type" [class.buy-text]="order.type === 'buy'" [class.sell-text]="order.type === 'sell'">
+                {{ order.type === 'buy' ? 'BUY' : 'SELL' }}
+              </span>
+              <span class="col-price">{{ formatCurrency(order.price) }}</span>
+              <span class="col-units">{{ order.filled_units }}/{{ order.units }}</span>
+              <span class="col-status" [class]="'status-' + order.status">
+                {{ order.status | uppercase }}
+              </span>
+              <span class="col-action">
+                <button 
+                  *ngIf="order.status === 'open' || order.status === 'partial'"
+                  class="cancel-btn"
+                  (click)="cancelOrder(order)"
+                  (mouseenter)="showHelp($event, 'Click here to cancel the order.')"
+                  (mouseleave)="closeTooltip()">
+                  Cancel
+                </button>
+              </span>
+            </div>
+            <div *ngIf="myOrders.length === 0" class="empty-orders">
+              No orders placed yet
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tab-content" *ngIf="activeTab === 'graph'">
+        <div class="graph-header">
+          <div class="time-range-selector"
+              (mouseenter)="showHelp($event, 'Here you can change the time range of the chart to view specifics.')"
+              (mouseleave)="closeTooltip()">
+            <label for="timeRange">Time Range:</label>
+            <select 
+              id="timeRange" 
+              [(ngModel)]="chartTimeRange" 
+              (change)="onTimeRangeChange()"
+              class="time-range-dropdown">
+              <option *ngFor="let option of chartTimeRangeOptions" [value]="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="custom-date-picker" *ngIf="showCustomDatePicker">
+            <div class="date-input-group">
+              <label for="startDate">From:</label>
+              <input 
+                type="datetime-local" 
+                id="startDate" 
+                [(ngModel)]="customStartDate"
+                class="date-input">
+            </div>
+            <div class="date-input-group">
+              <label for="endDate">To:</label>
+              <input 
+                type="datetime-local" 
+                id="endDate" 
+                [(ngModel)]="customEndDate"
+                class="date-input">
+            </div>
+            <button 
+              class="apply-date-btn"
+              (click)="applyCustomDateRange()"
+              [disabled]="!customStartDate || !customEndDate">
+              Apply
+            </button>
+          </div>
+        </div>
+        
+        <div class="graph-container">
+          <canvas id="priceChart"></canvas>
+        </div>
+      </div>
+    </main>
+
+    <!-- Right Panel - Market Stats (Optional) -->
+    <aside class="right-panel" id="wt-market-stats">
+      <div class="market-stats">
+        <h3 class="stats-title">Market Stats</h3>
+        
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The highest price someone will buy the stock for.')"
+        (mouseleave)="closeTooltip()">
+          <span class="stat-label">Best Bid</span>
+          <span class="stat-value bid-color">{{ bestBid !== null ? formatCurrency(bestBid) : '-' }}</span>
+        </div>
+        
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The highest price someone will sell the stock for.')"
+        (mouseleave)="closeTooltip()">
+          <span class="stat-label">Best Ask</span>
+          <span class="stat-value ask-color">{{ bestAsk !== null ? formatCurrency(bestAsk) : '-' }}</span>
+        </div>
+        
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The difference between the best bid and best ask.')"
+        (mouseleave)="closeTooltip()">
+          <span class="stat-label">Spread</span>
+          <span class="stat-value">{{ spread !== null ? formatCurrency(spread) : '-' }}</span>
+        </div>
+        
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The price of the last sold stock.')"
+        (mouseleave)="closeTooltip()">
+          <span class="stat-label">Last Price</span>
+          <span class="stat-value highlight">{{ lastPrice !== null ? formatCurrency(lastPrice) : '-' }}</span>
+        </div>
+        
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The total number of stocks that have been traded.')"
+        (mouseleave)="closeTooltip()">
+          <span class="stat-label">Total Trades</span>
+          <span class="stat-value">{{ trades.length }}</span>
+        </div>
+        
+        <div class="stat-divider"></div>
+        
+        <h3 class="stats-title">Your Position</h3>
+        
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The number of stocks you currently hold.')"
+        (mouseleave)="closeTooltip()">
+          <span class="stat-label">{{ symbol }} Units</span>
+          <span class="stat-value">{{ positionUnits }}</span>
+        </div>
+        
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The ratio of stocks you have bought and the total amount you have spent on them.')"
+        (mouseleave)="closeTooltip()">
+          <span class="stat-label">Avg Price</span>
+          <span class="stat-value">{{ positionAvgPrice > 0 ? formatCurrency(positionAvgPrice) : '-' }}</span>
+        </div>
+        
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The value of all the stocks you hold.')"
+        (mouseleave)="closeTooltip()">
+          <span class="stat-label">P&L</span>
+          <span class="stat-value" [class.positive]="lastPrice && positionUnits > 0 && (lastPrice - positionAvgPrice) > 0" [class.negative]="lastPrice && positionUnits > 0 && (lastPrice - positionAvgPrice) < 0">
+            {{ positionUnits > 0 && lastPrice ? formatCurrency((lastPrice - positionAvgPrice) * positionUnits) : '-' }}
+          </span>
+        </div>
+        
+        <div class="stat-divider"></div>
+        
+        <h3 class="stats-title">Environment Info</h3>
+        
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'This tells you if you are able to short the current stock.')"
+        (mouseleave)="closeTooltip()">
+          <span class="stat-label">Shorting</span>
+          <span class="stat-value">{{ currentEnvironment?.allow_shorting ? 'Allowed' : 'Not Allowed' }}</span>
+        </div>
+        
+        <div class="stat-item" *ngIf="currentEnvironment?.allow_shorting">
+          <span class="stat-label">Max Short</span>
+          <span class="stat-value">{{ currentEnvironment?.max_short_units }} units</span>
+        </div>
+        
+        <div class="stat-item"
+        (mouseenter)="showHelp($event, 'The number of different stocks in the market.')"
+        (mouseleave)="closeTooltip()">
+          <span class="stat-label">Stocks</span>
+          <span class="stat-value">{{ environmentStocks.length }}</span>
+        </div>
+        
+        <div class="stat-item" *ngIf="isAdmin"
+        (mouseenter)="showHelp($event, 'You are the admin for this market simulation.')"
+        (mouseleave)="closeTooltip()">
+          <span class="stat-label">Role</span>
+          <span class="stat-value admin-badge">Admin</span>
+        </div>
+
+        <div class="stat-divider"></div>
+
+        <h3 class="stats-title">Leaderboard</h3>
+        <div class="leaderboard-container">
+          <div *ngIf="isLoadingLeaderboard" class="leaderboard-loading">Loading...</div>
+
+          <div *ngIf="!isLoadingLeaderboard && leaderboardEntries.length === 0" class="leaderboard-empty">
+            No participants yet
+          </div>
+
+          <div *ngFor="let entry of leaderboardEntries"
+              class="leaderboard-row"
+              [class.leaderboard-row--me]="entry.isCurrentUser">
+            <span class="leaderboard-rank">{{ entry.rank }}</span>
+            <span class="leaderboard-username">{{ entry.username }}</span>
+            <div class="leaderboard-values">
+              <span class="leaderboard-cash">{{ formatCurrency(entry.cash) }}</span>
+              <span class="leaderboard-change"
+                    [class.positive]="entry.cashChange > 0"
+                    [class.negative]="entry.cashChange < 0">
+                {{ entry.cashChange >= 0 ? '+' : '' }}{{ formatCurrency(entry.cashChange) }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+  </ng-container>
+</div>
+
+<div *ngIf="activeTooltip"
+     class="tooltip"
+     [ngClass]="{'tooltip-left': activeTooltip.position === 'left', 'tooltip-right': activeTooltip.position === 'right'}"
+     [style.top.px]="activeTooltip.y"
+     [style.left.px]="activeTooltip.x"
+     [innerHTML]="activeTooltip.text"
+     (click)="closeTooltip()">
+</div>

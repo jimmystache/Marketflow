@@ -1,0 +1,54 @@
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--green-50);
+}
+
+.app-header {
+  position: fixed;
+  top: 0;
+  right: 0;
+  padding: 1rem 1.5rem;
+  z-index: 1000;
+}
+
+.logout-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--white);
+  background: var(--green-600);
+  border: 1px solid var(--green-600);
+  border-radius: 0.625rem;
+  cursor: pointer;
+  transition: background-color 300ms ease, border-color 300ms ease, transform 300ms ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.logout-button:hover {
+  background: var(--green-700);
+  border-color: var(--green-700);
+  transform: scale(1.05);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.logout-button:active {
+  transform: scale(1.02);
+}
+
+.logout-icon {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+}
+
+.app-content {
+  flex: 1;
+  width: 100%;
+  overflow: auto;
+}
+

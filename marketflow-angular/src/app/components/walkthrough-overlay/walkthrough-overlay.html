@@ -1,0 +1,34 @@
+<ng-container *ngIf="isActive && step">
+ 
+  <div class="wt-backdrop" (click)="close()"></div>
+
+  <div class="wt-ring" [ngStyle]="ringStyle"></div>
+
+  <div
+    class="wt-tooltip"
+    [class.wt-tooltip--visible]="tooltipVisible"
+    [ngStyle]="tooltipStyle"
+    (click)="$event.stopPropagation()">
+
+    <div class="wt-progress">
+      <span
+        *ngFor="let s of wt.steps; let i = index"
+        class="wt-dot"
+        [class.wt-dot--active]="i === stepIndex"
+        [class.wt-dot--done]="i < stepIndex">
+      </span>
+    </div>
+
+    <h3 class="wt-title">{{ step.title }}</h3>
+    <p class="wt-body" [innerHTML]="step.body"></p>
+
+    <div class="wt-actions">
+      <button class="wt-btn-skip" (click)="close()">Skip tour</button>
+      <button class="wt-btn-next" (click)="next()">
+        {{ isLast() ? '&#x2714;&nbsp;Done' : 'Next&nbsp;&rarr;' }}
+      </button>
+    </div>
+    
+    <span class="wt-counter">{{ stepIndex + 1 }} / {{ totalSteps }}</span>
+  </div>
+</ng-container>

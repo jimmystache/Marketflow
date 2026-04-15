@@ -1,0 +1,22 @@
+<div class="card group relative overflow-hidden bg-white border-2 border-gray-100 hover:border-green-200 hover:shadow-xl transition-all duration-300 cursor-pointer" (click)="onClick()">
+  <!-- Decorative circular element in top-right -->
+  <div class="decorative-circle"></div>
+  
+  <div class="card-content relative p-8 flex flex-col items-center space-y-6">
+    <!-- Icon Container -->
+    <div class="icon-container p-4 bg-green-100 rounded-2xl group-hover:bg-green-200 transition-colors">
+      <div class="icon-wrapper" [innerHTML]="getIconSvg()"></div>
+    </div>
+    
+    <!-- Text Content -->
+    <div class="text-center space-y-2">
+      <h2>{{ title }}</h2>
+      <p class="text-gray-600 text-sm">{{ description }}</p>
+    </div>
+    
+    <!-- Button -->
+    <button class="card-button w-full bg-green-600 hover:bg-green-700 text-white group-hover:scale-105 transition-transform">
+      {{ buttonLabel }}
+    </button>
+  </div>
+</div>
