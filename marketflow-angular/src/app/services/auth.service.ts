@@ -1,192 +1,97 @@
+<<<<<<< HEAD
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
+=======
+import { Injectable, signal } from '@angular/core';
+import { SupabaseService } from './supabase.service';
+>>>>>>> fae0bc1c493f5a7a197276a7616a47efe2c0b559
 
-/**
- * Token storage key in localStorage
- */
-const TOKEN_KEY = 'marketflow_session_token';
-const ACCOUNT_KEY = 'marketflow_account_name';
-
-/**
- * Login request interface matching the Ad Hoc Markets API format
- */
-export interface LoginRequest {
-  username: string; // Format: "account|email"
-  password: string;
-}
-
-/**
- * User role interface
- */
-export interface UserRole {
-  authority: string;
-}
-
-/**
- * Account owner/person interface
- */
-export interface Person {
-  id: number;
-  createdDate: string;
-  lastModifiedDate: string;
-  accountId: number;
-  firstName: string | null;
-  lastName: string | null;
-  email: string;
-  roles: string[];
-}
-
-/**
- * Account interface
- */
-export interface Account {
-  id: number;
-  createdDate: string;
-  lastModifiedDate: string;
-  name: string;
-  description: string | null;
-  owner: Person;
-  approval: boolean;
-  approvalDescription: string;
-}
-
-/**
- * Login response interface matching the Ad Hoc Markets API response structure
- */
-export interface LoginResponse {
-  requestUrl: string;
-  token: string;
-  account: Account;
-  person: Person;
-}
-
-/**
- * Authentication service for handling user login and session management
- */
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
+<<<<<<< HEAD
   private readonly loginUrl = environment.loginApiUrl || 'https://fm-data.herokuapp.com/api/tokens';
+=======
+  private _isLoggedIn = signal(false);
+  private _userEmail = signal<string | null>(null);
+  private _accessToken = signal<string | null>(null);
+>>>>>>> fae0bc1c493f5a7a197276a7616a47efe2c0b559
 
-  private readonly httpOptions = {
-    headers: new HttpHeaders({
-      'Accept': 'application/json, application/hal+json',
-      'Content-Type': 'application/json'
-    })
-  };
+  constructor(private supabaseService: SupabaseService) {
+    // Seed initial state from any existing session
+    this.supabaseService.getSession().then(({ data }) => {
+      this._isLoggedIn.set(!!data.session);
+      this._userEmail.set(data.session?.user?.email ?? null);
+      this._accessToken.set(data.session?.access_token ?? null);
+    });
 
-  constructor(private http: HttpClient) {}
-
-  /**
-   * Authenticates user with account, email and password
-   * Combines account and email into username format: "account|email"
-   * @param account User account identifier
-   * @param email User email address
-   * @param password User password
-   * @returns Observable that emits the login response
-   */
-  login(account: string, email: string, password: string): Observable<LoginResponse> {
-    // Combine account and email into username format: "account|email"
-    const username = `${account}|${email}`;
-    const loginRequest: LoginRequest = { username, password };
-
-    return this.http.post<LoginResponse>(this.loginUrl, loginRequest, this.httpOptions).pipe(
-      map((response) => {
-        // Store the token and account name from the response
-        if (response.token) {
-          this.setToken(response.token);
-        }
-        if (account) {
-          this.setAccount(account);
-        }
-        return response;
-      }),
-      catchError((error: HttpErrorResponse) => {
-        return throwError(() => this.handleError(error));
-      })
-    );
+    // Keep state in sync when auth changes (login, logout, token refresh)
+    this.supabaseService.onAuthStateChange((_event, session) => {
+      this._isLoggedIn.set(!!session);
+      this._userEmail.set(session?.user?.email ?? null);
+      this._accessToken.set(session?.access_token ?? null);
+    });
   }
 
   /**
-   * Stores the authentication token in localStorage
-   * @param token The session token or ID to store
+   * Signs in with email and password via Supabase Auth.
+   * Throws an error object with a `message` property on failure.
    */
-  private setToken(token: string): void {
-    localStorage.setItem(TOKEN_KEY, token);
-  }
-
-  /**
-   * Stores the account name in localStorage
-   * @param account The account name to store
-   */
-  private setAccount(account: string): void {
-    localStorage.setItem(ACCOUNT_KEY, account);
-  }
-
-  /**
-   * Retrieves the stored authentication token from localStorage
-   * @returns The stored token or null if not found
-   */
-  getToken(): string | null {
-    return localStorage.getItem(TOKEN_KEY);
-  }
-
-  /**
-   * Retrieves the stored account name from localStorage
-   * @returns The stored account name or null if not found
-   */
-  getAccount(): string | null {
-    return localStorage.getItem(ACCOUNT_KEY);
-  }
-
-  /**
-   * Checks if the user is currently logged in
-   * @returns true if a token exists in localStorage, false otherwise
-   */
-  isLoggedIn(): boolean {
-    return !!this.getToken();
-  }
-
-  /**
-   * Logs out the user by removing the stored token and account
-   */
-  logout(): void {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(ACCOUNT_KEY);
-  }
-
-  /**
-   * Handles HTTP errors and returns a user-friendly error message
-   * @param error The HTTP error response
-   * @returns Error object with message
-   */
-  private handleError(error: HttpErrorResponse): { message: string; status?: number } {
-    if (error.error instanceof ErrorEvent) {
-      // Client-side error
-      return { message: 'An error occurred. Please try again.' };
-    } else {
-      // Server-side error
-      const status = error.status;
-      switch (status) {
-        case 401:
-          return { message: 'Invalid account, email or password.', status };
-        case 403:
-          return { message: 'Access forbidden. Please contact support.', status };
-        case 404:
-          return { message: 'Login endpoint not found.', status };
-        case 500:
-          return { message: 'Server error. Please try again later.', status };
-        default:
-          return {
-            message: error.error?.message || 'An unexpected error occurred. Please try again.',
-            status
-          };
-      }
+  async login(email: string, password: string): Promise<void> {
+    const { error } = await this.supabaseService.signInWithPassword(email, password);
+    if (error) {
+      throw { message: error.message };
     }
   }
-}
 
+  /**
+   * Creates a new user account via Supabase Auth.
+   * Returns true if email confirmation is required, false if logged in immediately.
+   * Throws an error object with a `message` property on failure.
+   */
+  async signUp(email: string, password: string): Promise<{ confirmationRequired: boolean }> {
+    const { data, error } = await this.supabaseService.signUp(email, password);
+    if (error) {
+      throw { message: error.message };
+    }
+    // If session is null after sign-up, Supabase requires email confirmation
+    const confirmationRequired = !data.session;
+    return { confirmationRequired };
+  }
+
+  /**
+   * Returns true if the user has an active Supabase session.
+   * Synchronous — reads a signal updated via onAuthStateChange.
+   */
+  isLoggedIn(): boolean {
+    return this._isLoggedIn();
+  }
+
+  /**
+   * Returns the current user's email address.
+   * Used by home.html to display a welcome message.
+   */
+  getAccount(): string | null {
+    return this._userEmail();
+  }
+
+  /**
+   * Returns the Supabase access token for the current session.
+   * Note: components that pass this to fm-data API endpoints will receive
+   * 401 errors — those calls need to be migrated to Supabase separately.
+   */
+  getToken(): string | null {
+    return this._accessToken();
+  }
+
+  /**
+   * Signs out the current user via Supabase Auth.
+   */
+  async logout(): Promise<void> {
+    await this.supabaseService.signOut();
+  }
+}

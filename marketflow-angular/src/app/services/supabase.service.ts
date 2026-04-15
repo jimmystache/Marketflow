@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, RealtimeChannel, Session } from '@supabase/supabase-js';
 import { BehaviorSubject } from 'rxjs';
 import { environment } from '../../environments/environment';
 
@@ -1711,5 +1711,27 @@ export class SupabaseService {
         }
       )
       .subscribe();
+  }
+
+  // ==================== AUTH ====================
+
+  signInWithPassword(email: string, password: string) {
+    return this.supabase.auth.signInWithPassword({ email, password });
+  }
+
+  signUp(email: string, password: string) {
+    return this.supabase.auth.signUp({ email, password });
+  }
+
+  signOut() {
+    return this.supabase.auth.signOut();
+  }
+
+  getSession() {
+    return this.supabase.auth.getSession();
+  }
+
+  onAuthStateChange(callback: (event: string, session: Session | null) => void) {
+    return this.supabase.auth.onAuthStateChange(callback);
   }
 }

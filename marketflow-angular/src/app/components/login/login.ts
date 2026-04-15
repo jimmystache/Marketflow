@@ -12,9 +12,11 @@ import { AuthService } from '../../services/auth.service';
   styleUrl: './login.css'
 })
 export class Login {
+  mode = signal<'signin' | 'signup'>('signin');
   loginForm: FormGroup;
   isLoading = signal(false);
   errorMessage = signal<string | null>(null);
+  successMessage = signal<string | null>(null);
 
   constructor(
     private fb: FormBuilder,
@@ -22,16 +24,19 @@ export class Login {
     private router: Router
   ) {
     this.loginForm = this.fb.group({
-      account: ['opulent-most', [Validators.required]],
-      email: ['u1319222@utah.edu', [Validators.required, Validators.email]],
-      password: ['!adhoc1', [Validators.required]]
+      email: ['', [Validators.required, Validators.email]],
+      password: ['', [Validators.required, Validators.minLength(6)]]
     });
   }
 
-  /**
-   * Handles form submission
-   */
-  onSubmit(): void {
+  switchMode(mode: 'signin' | 'signup'): void {
+    this.mode.set(mode);
+    this.errorMessage.set(null);
+    this.successMessage.set(null);
+    this.loginForm.reset();
+  }
+
+  async onSubmit(): Promise<void> {
     if (this.loginForm.invalid) {
       this.markFormGroupTouched();
       return;
@@ -39,71 +44,53 @@ export class Login {
 
     this.isLoading.set(true);
     this.errorMessage.set(null);
+    this.successMessage.set(null);
 
-    const { account, email, password } = this.loginForm.value;
+    const { email, password } = this.loginForm.value;
 
-    this.authService.login(account, email, password).subscribe({
-      next: () => {
-        this.isLoading.set(false);
-        // Redirect to homepage on successful login
+    try {
+      if (this.mode() === 'signin') {
+        await this.authService.login(email, password);
         this.router.navigate(['/']);
-      },
-      error: (error) => {
-        this.isLoading.set(false);
-        this.errorMessage.set(error.message || 'Login failed. Please try again.');
+      } else {
+        const { confirmationRequired } = await this.authService.signUp(email, password);
+        if (confirmationRequired) {
+          this.successMessage.set('Account created! Check your email to confirm before signing in.');
+          this.loginForm.reset();
+        } else {
+          this.router.navigate(['/']);
+        }
       }
-    });
+    } catch (error: any) {
+      this.errorMessage.set(error?.message || 'Something went wrong. Please try again.');
+    } finally {
+      this.isLoading.set(false);
+    }
   }
 
-  /**
-   * Marks all form fields as touched to show validation errors
-   */
   private markFormGroupTouched(): void {
     Object.keys(this.loginForm.controls).forEach((key) => {
-      const control = this.loginForm.get(key);
-      control?.markAsTouched();
+      this.loginForm.get(key)?.markAsTouched();
     });
   }
 
-  /**
-   * Gets the error message for a form field
-   * @param fieldName The name of the form field
-   * @returns Error message string or null
-   */
   getFieldError(fieldName: string): string | null {
     const control = this.loginForm.get(fieldName);
     if (control && control.touched && control.errors) {
       if (control.errors['required']) {
-        return `${this.getFieldLabel(fieldName)} is required`;
+        return `${fieldName === 'email' ? 'Email' : 'Password'} is required`;
       }
       if (control.errors['email']) {
         return 'Please enter a valid email address';
+      }
+      if (control.errors['minlength']) {
+        return 'Password must be at least 6 characters';
       }
     }
     return null;
   }
 
-  /**
-   * Checks if a form field has an error
-   * @param fieldName The name of the form field
-   * @returns true if the field has an error and is touched
-   */
   hasFieldError(fieldName: string): boolean {
     return !!this.getFieldError(fieldName);
   }
-
-  /**
-   * Gets the display label for a form field
-   * @param fieldName The name of the form field
-   * @returns Display label
-   */
-  private getFieldLabel(fieldName: string): string {
-    const labels: { [key: string]: string } = {
-      account: 'Account',
-      email: 'Email',
-      password: 'Password'
-    };
-    return labels[fieldName] || fieldName;
-  }
 }
-

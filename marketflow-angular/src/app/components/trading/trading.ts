@@ -870,11 +870,12 @@ export class Trading implements OnInit, OnDestroy {
       const startingCash = this.currentEnvironment.starting_cash ?? 10000;
       this.leaderboardEntries = participants
         .filter(p => !(p.trader?.username ?? '').startsWith('BOT_'))
+        .sort((a, b) => Number(b.available_cash) - Number(a.available_cash))
         .map((p, i) => ({
           rank: i + 1,
           username: p.trader?.username ?? 'Unknown',
-          cash: Number(p.cash),
-          cashChange: Number(p.cash) - startingCash,
+          cash: Number(p.settled_cash),
+          cashChange: Number(p.settled_cash) - startingCash,
           isCurrentUser: p.trader_id === this.traderId,
         }));
     } catch (e) {
