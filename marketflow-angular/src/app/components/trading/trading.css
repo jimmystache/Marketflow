@@ -159,6 +159,7 @@
   grid-template-columns: 340px 1fr 220px;
   flex: 1;
   overflow: hidden;
+  background-color: var(--green-50);
 }
 
 /* Left Panel */
@@ -438,7 +439,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  max-height: 90vh;
+  max-height: 120vh;
 }
 
 /* Symbol Header */
@@ -943,6 +944,7 @@
   border-left: 1px solid #2d3a4f;
   padding: 1rem;
   overflow-y: auto;
+  
 }
 
 .market-stats {
@@ -2211,7 +2213,7 @@ p {
 /* Admin badge */
 .admin-badge {
   background: #22c55e;
-  color: #000 !important;
+  color: #fff !important;
   padding: 0.125rem 0.5rem;
   border-radius: 0.25rem;
   font-size: 0.75rem !important;
@@ -3236,4 +3238,10 @@ p {
   background: #16a34a;
   color: white;
   border-color: #16a34a;
+}
+
+.leaderboard-container {
+  max-height: 60vh;
+  overflow-y: auto; 
+  scrollbar-width: none;
 }
