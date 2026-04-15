@@ -1,25 +1,13 @@
-<<<<<<< HEAD
-import { Injectable } from '@angular/core';
-import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
-import { Observable, throwError } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
-import { environment } from '../../environments/environment';
-=======
 import { Injectable, signal } from '@angular/core';
 import { SupabaseService } from './supabase.service';
->>>>>>> fae0bc1c493f5a7a197276a7616a47efe2c0b559
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
-<<<<<<< HEAD
-  private readonly loginUrl = environment.loginApiUrl || 'https://fm-data.herokuapp.com/api/tokens';
-=======
   private _isLoggedIn = signal(false);
   private _userEmail = signal<string | null>(null);
   private _accessToken = signal<string | null>(null);
->>>>>>> fae0bc1c493f5a7a197276a7616a47efe2c0b559
 
   constructor(private supabaseService: SupabaseService) {
     // Seed initial state from any existing session
